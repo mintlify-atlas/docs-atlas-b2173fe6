@@ -1,0 +1,132 @@
+---
+title: "Run as different user"
+description: "Launch a process under a different user account, including SYSTEM, Local Service, Network Service, or any interactive user, using System Informer's Run As dialog."
+---
+
+The **Run As** dialog lets you start any program under a user account other than your own. It supports interactive users, service accounts, and special Windows identities such as `NT AUTHORITY\SYSTEM` — going well beyond what the built-in `runas.exe` command offers.
+
+## How it works
+
+System Informer's run-as mechanism has three stages:
+
+1. You fill in the dialog with the program path, target user, logon type, and optional credentials.
+2. If the target account requires elevated access that the current process cannot provide directly, System Informer creates a short-lived service (`phsvc`) to perform the launch.
+3. The service starts the target program in the correct session and desktop, then stops itself.
+
+This service-based approach allows launching processes as `SYSTEM` or other service accounts without requiring you to already be running at that privilege level.
+
+## Opening the dialog
+
+<Steps>
+  <Step title="Open the Hacker menu">
+    In the System Informer main window, click **Hacker** in the menu bar.
+  </Step>
+  <Step title="Click Run as">
+    Select **Run as** from the menu. The Run As dialog opens.
+  </Step>
+  <Step title="Enter the program path">
+    Type the full path to the executable in the **Program** field, or click **Browse** to pick a file. The drop-down lists recently used programs for quick re-use.
+  </Step>
+  <Step title="Choose the target user">
+    Select or type a user in the **Username** field. The list is pre-populated with:
+
+    - `NT AUTHORITY\SYSTEM`
+    - `NT AUTHORITY\LOCAL SERVICE`
+    - `NT AUTHORITY\NETWORK SERVICE`
+    - All local and domain user accounts discovered on the system
+  </Step>
+  <Step title="Set the logon type">
+    Choose how the credentials are used from the **Type** dropdown:
+
+    | Logon type | When to use |
+    |---|---|
+    | **Interactive** | Normal desktop login; the program can show a window. This is the default. |
+    | **Batch** | Non-interactive, for scheduled-task-like execution. |
+    | **Network** | Authenticates over the network but does not cache credentials locally. |
+    | **New credentials** | Uses your current token for local access but the supplied credentials for network access. |
+    | **Service** | Used automatically when you select a service account (`SYSTEM`, `LOCAL SERVICE`, `NETWORK SERVICE`). |
+
+    <Note>
+    When you select a service account in the **Username** field, System Informer automatically switches the logon type to **Service** and disables the password field — service accounts do not use passwords.
+    </Note>
+  </Step>
+  <Step title="Enter a password (if required)">
+    For standard user accounts, type the account password in the **Password** field. The password is cleared from memory immediately after the process launches.
+  </Step>
+  <Step title="Select a session and desktop">
+    The **Session** dropdown lists all active Windows logon sessions. Choose the session where you want the program to appear. The **Desktop** dropdown lists the available desktops within the selected session's window station (for example, `WinSta0\Default`).
+  </Step>
+  <Step title="Configure optional flags">
+    - **Use linked token** — if you are running elevated, this strips the elevation and launches the program with the linked (medium-integrity) token instead. Useful for testing how a program behaves without elevation.
+    - **Create suspended** — creates the process in a suspended state so you can attach a debugger before any code runs.
+    - **Use UIAccess** — creates the process with UIAccess privileges, which allows it to interact with elevated UI elements on the desktop.
+  </Step>
+  <Step title="Click OK">
+    System Informer launches the program. If additional elevation is needed to create the service, a UAC prompt may appear.
+  </Step>
+</Steps>
+
+## Running as SYSTEM
+
+To start a command prompt or any other program as `NT AUTHORITY\SYSTEM`:
+
+<Steps>
+  <Step title="Open Run As">
+    Click **Hacker → Run as**.
+  </Step>
+  <Step title="Set the program">
+    Enter `cmd.exe` (or any other executable) in the **Program** field.
+  </Step>
+  <Step title="Select SYSTEM">
+    In **Username**, select `NT AUTHORITY\SYSTEM` from the dropdown. The logon type automatically changes to **Service** and the password field is disabled.
+  </Step>
+  <Step title="Click OK">
+    System Informer creates a temporary service that launches the program under the SYSTEM account in the current session.
+  </Step>
+</Steps>
+
+<Warning>
+Programs running as SYSTEM have unrestricted access to the local machine. Use this only for legitimate administrative and debugging tasks.
+</Warning>
+
+## Running as TrustedInstaller
+
+TrustedInstaller (`NT SERVICE\TrustedInstaller`) is a service account with ownership rights over protected Windows system files. To run a process as TrustedInstaller:
+
+<Steps>
+  <Step title="Open Run As">
+    Click **Hacker → Run as**.
+  </Step>
+  <Step title="Type the account name">
+    In **Username**, type `NT SERVICE\TrustedInstaller` manually (it does not appear in the dropdown by default).
+  </Step>
+  <Step title="Set logon type to Service">
+    The logon type should be set to **Service**. Adjust it if it was not set automatically.
+  </Step>
+  <Step title="Click OK">
+    System Informer uses its service-based elevation mechanism to impersonate the TrustedInstaller account.
+  </Step>
+</Steps>
+
+## Running as a process's parent identity
+
+You can also start a new process that inherits the security context of an existing process. This is useful for launching a program that appears to the system as a child of a specific process — for example, running `cmd.exe` as a child of `explorer.exe` to get a medium-integrity shell.
+
+<Steps>
+  <Step title="Select a process">
+    In the System Informer process list, right-click the process whose token you want to inherit.
+  </Step>
+  <Step title="Choose Miscellaneous → Run as this user">
+    This opens the Run As dialog pre-filled with the process's user account. The username, password, and logon type fields are disabled because the token is taken directly from the process rather than via credential-based logon.
+  </Step>
+  <Step title="Enter the program path">
+    Type or browse to the program you want to launch.
+  </Step>
+  <Step title="Click OK">
+    The new process is created with the target process as its parent, inheriting its token and environment.
+  </Step>
+</Steps>
+
+<Tip>
+To launch a program as a non-elevated user when System Informer itself is elevated, use **Use linked token**. This is the safest way to test an application's normal-user behaviour without opening a separate non-elevated session.
+</Tip>

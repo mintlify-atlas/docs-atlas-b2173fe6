@@ -1,0 +1,308 @@
+---
+title: "Code conventions"
+description: "Naming, types, annotations, memory management, and other conventions for contributing C/C++ code to System Informer."
+---
+
+All code contributed to System Informer must follow the conventions documented here. These rules are derived from [HACKING.md](https://github.com/winsiderss/systeminformer/blob/master/HACKING.md) in the repository.
+
+## Naming
+
+<AccordionGroup>
+  <Accordion title="Casing rules">
+    | Identifier kind | Convention | Example |
+    |-----------------|------------|---------|
+    | Functions | CamelCase | `PhCreateString` |
+    | Function parameters | CamelCase | `BufferLength` |
+    | Global variables | CamelCase | `PhHeapHandle` |
+    | Local variables | lowerCamelCase | `processEntry` |
+    | Structs, enums, unions | `CAPS_WITH_UNDERSCORES` | `PH_STRING`, `PH_HASH_ENTRY` |
+  </Accordion>
+
+  <Accordion title="Prefix rules">
+    All public names must carry an appropriate prefix. The standard prefixes are:
+
+    | Prefix | Applies to | Visibility |
+    |--------|------------|------------|
+    | `Ph` / `PH_` | Functions, structs | Public |
+    | `Php` / `PHP_` | Functions, structs | Private |
+    | `Pha` / `PHA_` | Variant public names | Public |
+    | `Phap` / `PHAP_` | Variant private names | Private |
+
+    Private prefixes are formed by appending `p` to the public prefix: `Ph` → `Php`, `Pha` → `Phap`.
+
+    **Static functions and variables** must not have a public prefix, and names with a private prefix do not have to be `static`.
+
+    ```c
+    // Public function — Ph prefix
+    PPH_STRING PhCreateString(
+        _In_ PWSTR Buffer
+        );
+
+    // Private (file-scoped) function — no prefix required because it is static
+    static VOID InitializeInternalState(
+        VOID
+        );
+
+    // Private function with prefix — does not need to be static
+    VOID PhpFreeInternalState(
+        VOID
+        );
+    ```
+
+    Structures declared in a `.c`/`.cpp` file do not require a prefix.
+  </Accordion>
+
+  <Accordion title="Object creation and deletion naming">
+    Use the following verbs consistently when naming allocation and initialization functions:
+
+    | Verb | Meaning |
+    |------|---------|
+    | `Allocate` | Allocate memory without initialization |
+    | `Create` | Allocate memory and initialize the object (used with the reference counting system) |
+    | `Free` | Release memory from an `Allocate` or `Create` function |
+    | `Destroy` | Release an object created with `Create` |
+    | `Initialize` | Initialize an object with caller-supplied storage |
+    | `Delete` | Paired with `Initialize` — does not free memory, as the caller owns the storage |
+
+    Examples from the codebase:
+
+    ```c
+    PhAllocateFromFreeList / PhFreeToFreeList
+    PhCreateFileDialog  / PhFreeFileDialog
+    PhInitializeWorkQueue / PhDeleteWorkQueue
+    PhCreateString / PhDereferenceObject
+    ```
+  </Accordion>
+
+  <Accordion title="Length, Count, and Index">
+    These three terms have distinct meanings:
+
+    | Term | Unit | Example |
+    |------|------|---------|
+    | `Length` | Bytes | `PhCreateString` requires the length in bytes |
+    | `Count` | Elements | `PhSubstring` requires the length in characters |
+    | `Index` | Elements | `PhSubstring` requires the index in characters |
+
+    When writing null-terminated strings to an output buffer, the return count (if any) must include the null terminator character in its count.
+  </Accordion>
+</AccordionGroup>
+
+## Types
+
+Unless you are calling a Win32 API directly, use the standard System Informer types:
+
+| Type | Size | Notes |
+|------|------|-------|
+| `BOOLEAN` | 1 byte | Boolean value |
+| `LOGICAL` | 4 bytes | Boolean value (Win32-compatible) |
+| `UCHAR` | 1 byte | Unsigned 8-bit integer |
+| `SHORT` / `USHORT` | 2 bytes | Signed / unsigned 16-bit integer |
+| `LONG` / `ULONG` | 4 bytes | Signed / unsigned 32-bit integer |
+| `LONG64` / `ULONG64` | 8 bytes | Signed / unsigned 64-bit integer |
+| `CHAR` | 1 byte | 1-byte character |
+| `WCHAR` | 2 bytes | 2-byte wide character |
+| `PSTR` | pointer | Pointer to 1-byte character string |
+| `PWSTR` | pointer | Pointer to 2-byte wide character string |
+
+### Booleans
+
+Always test a boolean variable directly — never compare it to `TRUE` or `FALSE`:
+
+```c
+// Correct
+if (booleanVariable)
+{
+    ...
+}
+
+// Wrong — do not do this
+if (booleanVariable == TRUE)
+{
+    ...
+}
+```
+
+Use `!!` to coerce an integer to a boolean value:
+
+```c
+BOOLEAN isValid = !!SomeIntegerExpression();
+```
+
+## Annotations and qualifiers
+
+### SAL annotations
+
+All functions must use SAL annotations on their parameters:
+
+```c
+NTSTATUS PhOpenProcess(
+    _Out_ PHANDLE ProcessHandle,
+    _In_ ACCESS_MASK DesiredAccess,
+    _In_opt_ PCLIENT_ID ClientId
+    );
+```
+
+Common annotations include `_In_`, `_In_opt_`, `_Inout_`, `_Out_`, `_Out_opt_`, `_Outptr_`, and `_Outptr_opt_`.
+
+### No `volatile`
+
+Do not use `volatile` in definitions. When volatile semantics are needed, cast to a volatile pointer at the point of use:
+
+```c
+// Wrong
+volatile LONG RefCount;
+
+// Correct — cast at the point of use
+*(volatile LONG *)&RefCount = 0;
+```
+
+## Function success indicators
+
+Functions use one of four patterns to communicate success or failure:
+
+| Return type | Success condition | Notes |
+|-------------|-------------------|-------|
+| `BOOLEAN` | Return value is `TRUE` | Simple pass/fail |
+| `NTSTATUS` | `NT_SUCCESS(status)` is true | Preferred for NT-layer functions |
+| `HRESULT` | `HR_SUCCESS(hr)` is true | Do not use `SUCCEEDED` — third parties return `S_FALSE` for errors, which `SUCCEEDED` treats as success |
+| Return value | Value is not a sentinel (e.g. not `NULL`) | Used when the result itself is the output |
+
+Unless stated otherwise, a function that fails is guaranteed not to modify any of its `_Out_` or `_Out_opt_` parameters. This guarantee does not extend to callback functions — a failed function may still have invoked its callback.
+
+## Threads
+
+Every thread start routine must use the `USER_THREAD_START_ROUTINE` signature:
+
+```c
+_Function_class_(USER_THREAD_START_ROUTINE)
+NTSTATUS NTAPI NameOfRoutine(
+    _In_ PVOID Parameter
+    );
+```
+
+Create threads using `PhCreateThread` or `PhCreateThreadEx`. Do not use `CreateThread` or `_beginthreadex` directly.
+
+## Collections
+
+Choose the appropriate collection type based on your use case:
+
+| Type | Use | Style |
+|------|-----|-------|
+| `PH_ARRAY` | Array | Non-intrusive |
+| `PH_LIST` | Array | Non-intrusive |
+| `LIST_ENTRY` | Doubly linked list, stack, or queue | Intrusive |
+| `SINGLE_LIST_ENTRY` | Singly linked list or stack | Intrusive |
+| `PH_POINTER_LIST` | Array of pointers | Non-intrusive |
+| `RTL_AVL_TABLE` | AVL binary tree | Non-intrusive |
+| `PH_AVL_LINKS` | AVL binary tree | Intrusive |
+| `RTL_GENERIC_TABLE` | Splay binary tree | Non-intrusive |
+| `PH_HASHTABLE` | Hash table | Non-intrusive |
+| `PH_HASH_ENTRY` | Hash table | Intrusive |
+| `PH_CIRCULAR_BUFFER` | Circular buffer | Non-intrusive |
+
+## Synchronization
+
+Use the **queued lock** for all synchronization. It is small and performs well as both a mutex and a reader-writer lock. Use exclusive acquire/release functions when you need a mutex.
+
+Additional primitives:
+
+- **`PH_EVENT`** — event object that does not create a kernel event until needed; testing its state is very fast.
+- **`PH_RUNDOWN_PROTECT`** — rundown protection for objects that may be accessed from multiple threads during teardown.
+- **Condition variables** — declare and initialize a queued lock, then use `PhPulse(All)Condition` and `PhWaitForCondition`.
+- **Wake events** — low-overhead custom locking built on the queued lock. Test conditions in a loop and use `PhQueueWakeEvent` / `PhWaitForWakeEvent` to block; call `PhSetWakeEvent` when a condition changes.
+
+## Exceptions (SEH)
+
+The primary error-handling mechanism is the **return value** (`NTSTATUS`, `BOOLEAN`, etc.). Structured exception handling (SEH) is reserved for truly exceptional situations that cannot easily be recovered from, such as a lock acquire failure or a negative reference count.
+
+Permitted exceptions to this rule:
+
+- **`PhAllocate`** — raises an exception on allocation failure. Checking every allocation for failure is not worth the effort, as failures are extremely rare.
+- **`PhProbeAddress`** — raises an exception if an address is outside a specified range, allowing multiple range checks in a single SEH block.
+- **`STATUS_NOT_IMPLEMENTED`** — raised on code paths that should never be reached due to programmer error. `assert(FALSE)` is also acceptable in this case.
+
+<Warning>
+  Do not use SEH as a general control-flow mechanism or as a substitute for proper error handling via return values.
+</Warning>
+
+## Memory management
+
+Use `PhAllocate` and `PhFree` for raw memory allocation. For objects with lifetimes shared across threads or stored in global state, use the **reference counting system** via `PhReferenceObject` and `PhDereferenceObject`.
+
+### Auto-dereference pools
+
+Semi-automatic reference counting is available through auto-dereference pools (similar to `NSAutoreleasePool`). Call `PhAutoDereferenceObject` to register an object with the calling thread's pool; the object will be dereferenced at an unspecified future time, but is guaranteed to remain live for the duration of the current function.
+
+### Referencing rules
+
+- Reference an object whenever you store a pointer to it in a globally visible location or pass it to another thread.
+- In most other cases, an additional reference is not necessary.
+- All objects passed to functions must have a guaranteed reference for the duration of that call.
+
+<Warning>
+  Be careful with objects accessed inside window procedures. Messages can be pumped (for example, by dialog boxes) while the window procedure is executing. Reference any shared object as early as possible in the window procedure to prevent it from being destroyed underneath you.
+</Warning>
+
+## Strings
+
+Strings use the `PH_STRING` type, which is managed by reference counting. Every `PH_STRING` has an embedded length (always in bytes) and is additionally null-terminated for compatibility.
+
+### Creating strings
+
+```c
+PPH_STRING myString = PhCreateString(L"My string");
+
+wprintf(
+    L"My string is \"%s\", and uses %Iu bytes.\n",
+    myString->Buffer,
+    myString->Length
+    );
+```
+
+### Immutability
+
+String objects must be treated as **immutable** once the pointer has been shared with any other function or stored in a global variable. The only exception is when you create a string with `PhCreateString` or `PhCreateStringEx` and modify it before sharing the pointer.
+
+### Concatenation
+
+Concatenate multiple strings with `PhConcatStrings`:
+
+```c
+PPH_STRING newString;
+
+newString = PhConcatStrings(
+    4,
+    L"My first string, ",
+    L"My second string, ",
+    aStringFromSomewhere,
+    L"My fourth string."
+    );
+```
+
+To concatenate exactly two strings, use the simpler form:
+
+```c
+PPH_STRING newString;
+
+newString = PhConcatStrings2(
+    L"My first string, ",
+    L"My second string."
+    );
+```
+
+### Formatting
+
+```c
+PPH_STRING newString;
+
+newString = PhFormatString(
+    L"%d: %s, %#x",
+    100,
+    L"test",
+    0xff
+    );
+```
+
+<Tip>
+  Use `!!` to coerce an integer expression to a `BOOLEAN` before storing or comparing it: `BOOLEAN result = !!SomeFunction();`
+</Tip>

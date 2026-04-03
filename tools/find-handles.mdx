@@ -1,0 +1,104 @@
+---
+title: "Finding handles and DLLs"
+description: "Search every open handle and loaded module across all running processes to find which process has a file, registry key, or other object open."
+---
+
+The **Find Handles or DLLs** window lets you search across all processes in the system for a specific open handle or loaded module. This is the fastest way to answer questions like "which process is holding my file open?" or "which processes have loaded a particular DLL?"
+
+## Opening the search window
+
+Click **Find** in the menu bar and select **Find Handles or DLLs**. The search window opens as a separate, non-modal dialog so you can keep using System Informer while a search runs.
+
+## How to search
+
+<Steps>
+  <Step title="Choose an object type (optional)">
+    The **Type** dropdown on the left lists every kernel object type registered on the system (File, Key, Process, Thread, Semaphore, and so on), plus **Everything** to search all types at once. Narrowing the type speeds up results significantly for large systems.
+  </Step>
+  <Step title="Enter a search term">
+    Type part of the object name in the search box. Matching is case-insensitive and partial — you do not need to know the full path. For example, typing `chrome` will match any handle whose object name contains that string.
+
+    You can also paste a pointer address (e.g. `0xFFFF...`) to find the exact object or handle by address.
+
+    Leave the search box empty to return all objects of the selected type.
+  </Step>
+  <Step title="Click Find">
+    Click **Find** (or press **Enter**). The search runs in a background thread. System Informer enumerates every handle in the system and queries each one for its type name and object name.
+
+    <Note>
+    File handle queries are dispatched via a worker queue because resolving a file path can block if the underlying device is slow or unresponsive. Other object types are queried synchronously.
+    </Note>
+  </Step>
+  <Step title="Review the results">
+    Results appear in the list as they are found. Each row shows:
+
+    | Column | Description |
+    |---|---|
+    | **Process** | Name and PID of the process that owns the handle |
+    | **Type** | Kernel object type (File, Key, DLL, Mapped file, etc.) |
+    | **Name** | Resolved, human-readable object name |
+    | **Handle** | The handle value in the owning process (hexadecimal) |
+    | **Object address** | Kernel address of the underlying object (hidden by default) |
+    | **Original name** | Raw NT device-path form of the name (hidden by default) |
+    | **Granted access** | Access rights the handle was opened with (hidden by default) |
+
+    Click any column header to sort. Right-click a column header to show or hide optional columns.
+  </Step>
+  <Step title="Stop the search">
+    Click **Cancel** (the button changes from **Find** to **Cancel** while a search is running) to stop enumeration early and keep the results found so far.
+  </Step>
+</Steps>
+
+## Finding loaded DLLs and mapped files
+
+The search also covers loaded modules and memory-mapped files — not just kernel handles. When you search with type set to **Everything** or **File**, System Informer enumerates the module list of every process looking for DLLs and mapped images whose path matches your search term.
+
+Results from module searches appear in the same list with type **DLL**, **Mapped image**, or **Mapped file** to distinguish them from raw handle results.
+
+<Tip>
+To find every process that has loaded a specific DLL, type part of the DLL's filename (for example, `winhttp`) and set the type to **Everything** or leave it as **Everything**.
+</Tip>
+
+## Acting on results
+
+Right-click any row in the results list to see available actions:
+
+<CardGroup cols={2}>
+  <Card title="Go to process" icon="arrow-right">
+    Scrolls the main System Informer process list to the owning process and highlights it.
+  </Card>
+  <Card title="Properties" icon="circle-info">
+    Opens the object properties dialog for handles that support it (files, registry keys, processes, threads, and so on). Double-clicking a row also opens properties.
+  </Card>
+  <Card title="Close handle" icon="xmark">
+    Forcibly closes the selected handle in the remote process. See the warning below.
+  </Card>
+  <Card title="Copy" icon="copy">
+    Copies the selected row or a specific cell to the clipboard. Use **Ctrl+C** as a keyboard shortcut.
+  </Card>
+</CardGroup>
+
+<Warning>
+Closing a handle in another process can cause that process to crash, corrupt data, or produce unpredictable behaviour — especially for file, registry, or synchronisation object handles. System Informer asks for confirmation and warns you before proceeding. Only close handles when you fully understand the consequence.
+</Warning>
+
+You can also press **Delete** to close the selected handle, or **Ctrl+C** to copy.
+
+## Understanding handle colours
+
+Rows in the results list may be colour-coded based on handle attributes, matching the colours configured in System Informer's settings:
+
+- **Protected handles** (`OBJ_PROTECT_CLOSE`) are highlighted to indicate they cannot normally be closed.
+- **Inherited handles** (`OBJ_INHERIT`) are highlighted to indicate they were inherited from a parent process.
+- Handles that are both protected and inherited use a combined highlight colour.
+
+## Tips for common tasks
+
+**Which process is locking a file?**
+Type the filename (or part of it) in the search box, set the type to **File**, and click **Find**. All processes with that file open appear in the results. Right-click the result and choose **Close handle** to release the lock, then retry your operation.
+
+**Which processes have loaded a DLL?**
+Type part of the DLL name, leave the type as **Everything**, and click **Find**. Module search results are labelled **DLL** in the Type column.
+
+**Finding a handle by address?**
+Paste the kernel object address (for example, from a crash dump) into the search box. System Informer matches it against both the object address and the handle value.

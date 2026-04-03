@@ -1,0 +1,191 @@
+---
+title: "PE file viewer"
+description: "Inspect Windows PE/COFF and ELF binary files with peview.exe — the built-in PE viewer included with System Informer."
+---
+
+PE Viewer (`peview.exe`) is a standalone tool included with System Informer for inspecting binary file formats. You can examine PE headers, imports, exports, digital signatures, debug information, file hashes, embedded strings, and more — all without loading the file into a running process.
+
+## Supported file formats
+
+PE Viewer can open the following file types:
+
+- **PE executables**: `.exe`, `.dll`, `.com`, `.ocx`, `.sys`, `.scr`, `.cpl`, `.ax`, `.acm`
+- **Windows Metadata**: `.winmd`, `.mui`, `.mun`
+- **Firmware/boot**: `.efi`
+- **Static libraries**: `.lib` (COFF archive format)
+- **Debug symbols**: `.pdb`
+- **Linux ELF binaries** (read-only inspection)
+
+<Note>
+Run the 64-bit version of PE Viewer (`peview.exe`) on 64-bit Windows. The 32-bit build will warn you if you attempt to use it on a 64-bit system, and most features will not work correctly in that configuration.
+</Note>
+
+## Opening a file
+
+<Steps>
+  <Step title="Drag and drop">
+    Drag any supported file from Windows Explorer and drop it onto the PE Viewer window or its taskbar button.
+  </Step>
+  <Step title="File → Open">
+    Launch PE Viewer and use the **File → Open** dialog, or simply run `peview.exe` with no arguments to open the file picker. The dialog filters for all supported extensions by default.
+  </Step>
+  <Step title="From System Informer">
+    In the **Processes** list, double-click a process to open its properties. On the **Modules** tab, right-click any module and choose **Open in PE Viewer**.
+  </Step>
+  <Step title="Command line">
+    Pass the file path as an argument:
+
+    ```bat
+    peview.exe "C:\Windows\System32\ntdll.dll"
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+If you open a `.lnk` shortcut file, PE Viewer automatically resolves it to its target before loading. Reparse points are also followed transparently.
+</Tip>
+
+## Sections and tabs
+
+PE Viewer organises its output into tabs. Each tab focuses on a specific part of the binary's structure.
+
+<AccordionGroup>
+
+  <Accordion title="PE headers">
+    Displays the raw values of all three standard PE header structures in a grouped list view:
+
+    - **DOS header** (`IMAGE_DOS_HEADER`) — magic bytes, stub size, rich header offset, checksum, and entropy of the DOS stub.
+    - **File header** (`IMAGE_FILE_HEADER`) — target machine architecture, section count, timestamp, symbol table address, and characteristic flags.
+    - **Optional header** (`IMAGE_OPTIONAL_HEADER`) — image base, entry point, section and file alignment, subsystem, DLL characteristics, stack and heap sizes, and the number of data directory entries.
+
+    The overlay region at the end of the file (data after the last section) is also reported with its size, entropy, and hash.
+  </Accordion>
+
+  <Accordion title="Sections">
+    Lists each PE section (`.text`, `.data`, `.rdata`, `.rsrc`, and so on) with its virtual address, raw offset, raw size, characteristics flags, and entropy. High-entropy sections may indicate packing or encryption.
+  </Accordion>
+
+  <Accordion title="Imports">
+    Shows every imported symbol in a tree view grouped by DLL. For each import you can see:
+
+    - **RVA** — relative virtual address of the import thunk
+    - **DLL** — the module the symbol is imported from
+    - **Name** — the function name (or ordinal if imported by ordinal)
+    - **Hint** — the export hint index
+    - **Symbol** — resolved symbol name where available
+  </Accordion>
+
+  <Accordion title="Exports">
+    Lists every function or data symbol the binary exports, including:
+
+    - **RVA** — address of the exported symbol
+    - **Name** — exported function name
+    - **Ordinal** — ordinal number
+    - **Hint** — hint index
+    - **Forward** — forwarded export target (e.g. `NTDLL.RtlAllocateHeap`), if applicable
+    - **Undecorated name** — C++ demangled name where applicable
+  </Accordion>
+
+  <Accordion title="Resources">
+    Displays the resource directory tree embedded in the `.rsrc` section, including version information, manifests, string tables, icons, and other resource types.
+  </Accordion>
+
+  <Accordion title="CLR / .NET metadata">
+    For managed assemblies that target the Common Language Runtime, this tab parses the CLR header and the metadata storage signature (`BSJB`). It shows:
+
+    - CLR runtime version string
+    - Metadata stream names and offsets (`#~`, `#Strings`, `#US`, `#GUID`, `#Blob`)
+    - Strong name hash and flags
+    - Entry point token
+
+    This tab only appears when the binary contains a CLR data directory entry.
+  </Accordion>
+
+  <Accordion title="Debug information">
+    Parses every `IMAGE_DEBUG_DIRECTORY` entry in the binary. Supported debug types include:
+
+    | Type | Description |
+    |---|---|
+    | `CODEVIEW` | PDB path, GUID, and age for symbol lookup |
+    | `POGO` | Profile-guided optimisation data |
+    | `VC_FEATURE` | Visual C++ feature counts |
+    | `REPRO` | Deterministic build reproducibility hash |
+    | `EMBEDDED_PDB` | Portable PDB embedded in the binary |
+    | `PDB_CHECKSUM` | Hash algorithm and checksum for the PDB file |
+    | `EX_DLLCHARACTERISTICS` | Extended DLL characteristics |
+    | `PERFMAP` | .NET performance map information |
+
+    The PDB path and GUID shown in the `CODEVIEW` entry are what debuggers use to locate matching symbol files.
+  </Accordion>
+
+  <Accordion title="Digital signature / Authenticode">
+    Verifies and displays Authenticode signatures embedded in the `WIN_CERTIFICATE` data directory. For each certificate in the signature chain you can see:
+
+    - Subject name and issuer
+    - Certificate type (signer, counter-signer, timestamp)
+    - Validity period
+    - SHA-1 thumbprint
+    - Signature algorithm
+    - Certificate size
+
+    The overall verification status (trusted, untrusted, revoked, or unsigned) is shown at the top of the tab.
+  </Accordion>
+
+  <Accordion title="Strings">
+    Scans the file's raw bytes and extracts printable character sequences. You can configure:
+
+    - **Minimum length** — ignore strings shorter than this threshold
+    - **ANSI / Unicode** — choose which encodings to include
+    - **Extended character set** — include non-ASCII printable characters
+    - **Skip .text section** — focus on data sections to reduce noise
+    - **Skip high-entropy sections** — exclude likely-compressed or encrypted regions
+
+    Results show the section name, RVA, encoding type, length, and the string value. You can filter results using the search box.
+  </Accordion>
+
+  <Accordion title="Hashes">
+    Computes and displays multiple hash values for the file. Results are grouped by category:
+
+    **File hashes**
+    - CRC32 and CRC32C
+    - MD5
+    - SHA-1
+    - SHA-256
+    - SHA-384
+    - SHA-512
+
+    **Import hash**
+    - ImpHash (Mandiant/VirusTotal algorithm)
+    - ImpHash (Microsoft algorithm)
+    - Import fuzzy hash
+
+    **Fuzzy hashes**
+    - ssdeep
+    - TLSH
+
+    **Authenticode hashes**
+    - Authentihash SHA-1 and SHA-256 (the hash Authenticode actually signs)
+    - WDAC page hash SHA-1 and SHA-256 (used by Windows Defender Application Control)
+  </Accordion>
+
+  <Accordion title="Rich header">
+    Decodes the Rich header — a hidden structure embedded in the DOS stub by the Microsoft linker. It records the compiler product IDs and build numbers of each object file that was linked into the binary, along with the XOR key used to obfuscate it. This is useful for build environment fingerprinting.
+  </Accordion>
+
+  <Accordion title="Load configuration">
+    Parses the `IMAGE_LOAD_CONFIG_DIRECTORY` structure, which controls security and loader behaviour:
+
+    - Safe SEH handler table address and count
+    - Control Flow Guard (CFG) check function address and flags
+    - Guard CF function and IAT tables
+    - Security cookie address
+    - Dynamic value relocation table
+    - Enclave configuration
+    - Hybrid metadata pointer (ARM64X)
+  </Accordion>
+
+  <Accordion title="Exception handlers">
+    On x64 and ARM64 binaries, lists every entry in the `.pdata` section (the structured exception handler table). Each entry shows the function start RVA, end RVA, and unwind data address. This is used by the Windows runtime for stack unwinding.
+  </Accordion>
+
+</AccordionGroup>

@@ -1,0 +1,510 @@
+---
+title: "phlib — core library"
+description: "A guide to phlib's major subsystems: reference counting, strings, memory, collections, synchronization, the provider system, GUI controls, and Native API wrappers."
+---
+
+`phlib` is the shared utility library that all System Informer components build on. `SystemInformer.exe`, every plugin, `peview`, and `phsvc` all link against it. It exposes its public surface through the `PHLIBAPI` export macro — on the consuming side that expands to `__declspec(dllimport)`, and inside `phlib` itself it expands to nothing (the definition controls the decoration).
+
+```c
+// phlib/include/phbase.h
+#if !defined(_PHLIB_)
+#define PHLIBAPI __declspec(dllimport)
+#else
+#define PHLIBAPI
+#endif
+```
+
+Include the library by pulling in the top-level umbrella header:
+
+```c
+#include <ph.h>      // phbase.h → phnt, ref.h, queuedlock.h, phbasesup.h
+                     //            phnative.h, phutil.h
+```
+
+The sections below cover each major subsystem.
+
+## Reference counting
+
+Source: `phlib/include/ref.h`, `phlib/ref.c`
+
+Every heap-allocated object in phlib is managed through a type-tagged reference counting system modeled on the Windows kernel object manager. You register a type once with `PhCreateObjectType`, then allocate instances with `PhCreateObject`. When an object's reference count reaches zero its registered *delete procedure* is called before the memory is freed.
+
+### Defining and creating an object type
+
+```c
+// Define a delete procedure for your type
+VOID NTAPI MyObjectDeleteProc(
+    _In_ PVOID Object,
+    _In_ ULONG Flags
+    )
+{
+    PMY_OBJECT obj = Object;
+    // Release any resources the object holds.
+    PhDereferenceObject(obj->SomeChildObject);
+}
+
+// Register the type once at startup
+PPH_OBJECT_TYPE MyObjectType = PhCreateObjectType(
+    L"MyObject",
+    0,
+    MyObjectDeleteProc
+    );
+```
+
+### Allocating an instance
+
+```c
+PMY_OBJECT obj = PhCreateObject(sizeof(MY_OBJECT), MyObjectType);
+// obj->RefCount is 1; zero-initialize fields as needed.
+```
+
+`PhCreateObject` raises an exception on allocation failure, so you do not need to check the return value.
+
+### Retaining and releasing
+
+```c
+PhReferenceObject(obj);   // increment ref count
+PhDereferenceObject(obj); // decrement; frees when count reaches 0
+```
+
+Both functions accept a `PVOID` and return the same pointer, so they can be used inline. `PhReferenceObjectEx` and `PhDereferenceObjectEx` adjust the count by an arbitrary delta.
+
+### Swapping references safely
+
+```c
+// Atomically replace *slot with newObject, adjusting ref counts for both
+PhSwapReference(&slot, newObject);
+
+// Move a +1 reference into *slot, releasing whatever was there before
+PhMoveReference(&slot, newObject);
+```
+
+### Auto-dereference pools
+
+For temporary objects that only need to live until the current function returns, register them with `PhAutoDereferenceObject` (or its `PH_AUTO` alias). The thread's auto-pool holds a reference and releases it at an unspecified point after the current call returns.
+
+```c
+PPH_STRING label = PH_AUTO(PhCreateString(L"temporary label"));
+// label is valid for the duration of this call; no manual release needed.
+```
+
+<Note>
+  Auto-dereference pools are per-thread and not thread-safe. Never pass an auto-pooled pointer to another thread without first calling `PhReferenceObject`.
+</Note>
+
+## String handling
+
+Source: `phlib/include/phbasesup.h`
+
+### PH_STRING
+
+`PH_STRING` is the primary string type. It is a reference-counted object with an embedded length (in bytes) and a null-terminated `PWCH` buffer for compatibility with Win32 APIs.
+
+```c
+typedef struct _PH_STRING
+{
+    union
+    {
+        PH_STRINGREF sr;
+        struct
+        {
+            SIZE_T Length; // in bytes, not characters
+            PWCH   Buffer;
+        };
+    };
+    union
+    {
+        WCHAR Data[1];
+        struct { ULONG AllocationFlags; PVOID Allocation; };
+    };
+} PH_STRING, *PPH_STRING;
+```
+
+### Creating strings
+
+```c
+// From a compile-time literal
+PPH_STRING s = PhCreateString(L"My string");
+
+// Access the buffer and byte length
+wprintf(L"value=%s, bytes=%Iu\n", s->Buffer, s->Length);
+
+// Release when done
+PhDereferenceObject(s);
+```
+
+`PhCreateStringEx` takes an explicit byte length and an optional buffer, letting you create a string with uninitialized storage.
+
+### Concatenation
+
+```c
+// Concatenate up to N literal or PPH_STRING arguments
+PPH_STRING result = PhConcatStrings(
+    4,
+    L"first, ",
+    L"second, ",
+    someOtherString->Buffer,   // raw PWSTR is fine here
+    L"fourth."
+    );
+
+// Two-argument shortcut
+PPH_STRING result2 = PhConcatStrings2(L"hello ", L"world");
+```
+
+### Formatting
+
+```c
+PPH_STRING msg = PhFormatString(L"%d: %s, %#x", 100, L"test", 0xff);
+```
+
+### PH_STRINGREF — non-owning slice
+
+`PH_STRINGREF` is a lightweight, non-owning view into a string buffer. It carries a byte length and a `PWCH` pointer but does not own the memory and is not reference-counted. Use it for in-place slicing, searching, and splitting without allocating new `PH_STRING` objects.
+
+```c
+PH_STRINGREF sr;
+PhInitializeStringRef(&sr, L"hello world");
+
+PPH_STRINGREF firstWord, rest;
+PhSplitStringRefAtChar(&sr, L' ', &firstWord, &rest);
+```
+
+### String objects are immutable after sharing
+
+Once a `PPH_STRING` pointer has been stored in a global variable or passed to another thread, treat the object as immutable. The only exception is the window between `PhCreateString` / `PhCreateStringEx` and the first moment the pointer is shared.
+
+## Memory management
+
+Source: `phlib/include/phbasesup.h`
+
+Use `PhAllocate` and `PhFree` for raw heap allocations. `PhAllocate` raises an exception on failure — catching every allocation result is not necessary.
+
+```c
+PVOID buf = PhAllocate(1024);
+// ... use buf ...
+PhFree(buf);
+```
+
+`PhAllocateSafe` returns `NULL` on failure instead of raising. Use it in paths where allocation failure must be handled gracefully.
+
+Other allocation helpers:
+
+| Function | Description |
+|---|---|
+| `PhAllocateZero(size)` | Allocate and zero-initialize |
+| `PhAllocateCopy(data, size)` | Allocate and copy from an existing buffer |
+| `PhReAllocate(mem, size)` | Resize an existing allocation (raises on failure) |
+| `PhReAllocateSafe(mem, size)` | Resize, returning `NULL` on failure |
+| `PhAllocatePage(size, &actualSize)` | Allocate from a page-granularity pool |
+| `PhAllocatePageAligned(size, align)` | Aligned page allocation |
+
+For complex objects, prefer the reference-counting system over raw allocation so that cleanup is automatic.
+
+## Collections
+
+Source: `phlib/include/phbasesup.h`
+
+The full collection inventory from `HACKING.md`:
+
+| Name | Use | Type |
+|---|---|---|
+| `PH_ARRAY` | Array of fixed-size items | Non-intrusive |
+| `PH_LIST` | Array of pointers | Non-intrusive |
+| `LIST_ENTRY` | Doubly linked list or stack or queue | Intrusive |
+| `SINGLE_LIST_ENTRY` | Singly linked list or stack | Intrusive |
+| `PH_POINTER_LIST` | Array of pointers with free-slot reuse | Non-intrusive |
+| `RTL_AVL_TABLE` | Binary tree (AVL) | Non-intrusive |
+| `PH_AVL_LINKS` | Binary tree (AVL) | Intrusive |
+| `RTL_GENERIC_TABLE` | Binary tree (splay) | Non-intrusive |
+| `PH_HASHTABLE` | Hashtable | Non-intrusive |
+| `PH_HASH_ENTRY` | Hashtable | Intrusive |
+| `PH_CIRCULAR_BUFFER` | Circular buffer (typed variants) | Non-intrusive |
+
+<AccordionGroup>
+  <Accordion title="PH_ARRAY — value array">
+    `PH_ARRAY` stores fixed-size items directly (not pointers). You specify the item size at initialization time.
+
+    ```c
+    PH_ARRAY array;
+    PhInitializeArray(&array, sizeof(ULONG), 64); // initial capacity 64
+
+    ULONG value = 42;
+    PhAddItemArray(&array, &value);
+
+    ULONG *items = PhFinalArrayItems(&array);
+    SIZE_T count  = PhFinalArrayCount(&array);
+
+    PhDeleteArray(&array);
+    ```
+  </Accordion>
+
+  <Accordion title="PH_LIST — pointer list">
+    `PH_LIST` is a reference-counted object that stores an array of `PVOID` elements.
+
+    ```c
+    PPH_LIST list = PhCreateList(16); // initial capacity 16
+
+    PhAddItemList(list, somePointer);
+    PhAddItemList(list, anotherPointer);
+
+    for (ULONG i = 0; i < list->Count; i++)
+    {
+        PVOID item = list->Items[i]; // or PhItemList(list, i)
+        // ...
+    }
+
+    PhDereferenceObject(list); // frees the list
+    ```
+  </Accordion>
+
+  <Accordion title="PH_HASHTABLE — hash table">
+    `PH_HASHTABLE` is a non-intrusive open-addressing hashtable. You define entry size, a comparison function, and a hash function at creation time.
+
+    The structure of `PH_HASHTABLE_ENTRY` has a mandatory embedded `PH_HASH_ENTRY` header that the table manages, followed by your entry data.
+
+    ```c
+    typedef struct _MY_ENTRY
+    {
+        PH_HASHTABLE_ENTRY HashEntry; // must be first
+        HANDLE             Key;
+        PPH_STRING         Value;
+    } MY_ENTRY, *PMY_ENTRY;
+    ```
+
+    Create, look up, and remove entries using `PhCreateHashtable`, `PhAddEntryHashtable`, `PhLookupEntryHashtable`, and `PhRemoveEntryHashtable`.
+  </Accordion>
+
+  <Accordion title="PH_CIRCULAR_BUFFER — typed ring buffer">
+    `PH_CIRCULAR_BUFFER` exists in several typed variants used by graph data. For example, `PH_CIRCULAR_BUFFER_FLOAT` stores a rolling window of `FLOAT` samples. The graph control reads directly from these buffers when drawing CPU and memory history lines.
+  </Accordion>
+</AccordionGroup>
+
+## Synchronization
+
+Source: `phlib/include/queuedlock.h`, `phlib/include/phbasesup.h`
+
+### PH_QUEUED_LOCK — reader-writer lock
+
+`PH_QUEUED_LOCK` is phlib's primary synchronization primitive. It is a single `ULONG_PTR`, making it cheap to embed inside any structure. Use it as a mutex (exclusive-only) or as a reader-writer lock (mixed shared/exclusive).
+
+```c
+PH_QUEUED_LOCK lock = PH_QUEUED_LOCK_INIT;
+
+// Exclusive (write) lock
+PhAcquireQueuedLockExclusive(&lock);
+// ... modify shared state ...
+PhReleaseQueuedLockExclusive(&lock);
+
+// Shared (read) lock — multiple readers can hold simultaneously
+PhAcquireQueuedLockShared(&lock);
+// ... read shared state ...
+PhReleaseQueuedLockShared(&lock);
+
+// Non-blocking try
+if (PhTryAcquireQueuedLockExclusive(&lock))
+{
+    // ... got the lock ...
+    PhReleaseQueuedLockExclusive(&lock);
+}
+```
+
+### PH_EVENT — fast event
+
+`PH_EVENT` avoids creating a kernel event object until a waiter actually blocks. Testing its state (`PhTestEvent`) is a single memory read with no kernel transition.
+
+```c
+PH_EVENT event = PH_EVENT_INIT;
+
+// Signal from one thread
+PhSetEvent(&event);
+
+// Wait (with optional timeout)
+PhWaitForEvent(&event, NULL); // NULL = infinite
+```
+
+### PH_RUNDOWN_PROTECT — rundown protection
+
+`PH_RUNDOWN_PROTECT` lets a subsystem safely drain active callers before tearing itself down. Callers acquire protection before using a resource; the teardown path waits for all active acquisitions to complete.
+
+```c
+PH_RUNDOWN_PROTECT protect = PH_RUNDOWN_PROTECT_INIT;
+
+// In callers:
+if (PhAcquireRundownProtection(&protect))
+{
+    // ... use the resource ...
+    PhReleaseRundownProtection(&protect);
+}
+
+// In the teardown path:
+PhWaitForRundownProtection(&protect); // blocks until all callers have released
+```
+
+### Condition variables
+
+Condition variables are built on top of `PH_QUEUED_LOCK`. Declare a `PH_CONDITION` variable (which is a typedef for `PH_QUEUED_LOCK`) and use `PhWaitForCondition`, `PhPulseCondition`, and `PhPulseAllCondition`.
+
+```c
+PH_QUEUED_LOCK lock      = PH_QUEUED_LOCK_INIT;
+PH_CONDITION   condition = PH_CONDITION_INIT;
+
+// Waiter thread:
+PhAcquireQueuedLockExclusive(&lock);
+while (!ready)
+    PhWaitForCondition(&condition, &lock, NULL);
+PhReleaseQueuedLockExclusive(&lock);
+
+// Notifier thread:
+PhAcquireQueuedLockExclusive(&lock);
+ready = TRUE;
+PhReleaseQueuedLockExclusive(&lock);
+PhPulseAllCondition(&condition);
+```
+
+## Provider system
+
+Source: `phlib/include/provider.h`, `phlib/provider.c`
+
+The provider system drives periodic data collection. A `PH_PROVIDER_THREAD` owns a background thread and fires registered callbacks on a configurable timer interval.
+
+```c
+// Initialize and start a provider thread (1-second interval)
+PH_PROVIDER_THREAD providerThread;
+PhInitializeProviderThread(&providerThread, 1000);
+PhStartProviderThread(&providerThread);
+
+// Register a callback
+PH_PROVIDER_REGISTRATION registration;
+PhRegisterProvider(
+    &providerThread,
+    MyProviderFunction, // VOID NTAPI fn(_In_opt_ PVOID Object)
+    contextObject,
+    &registration
+    );
+PhSetEnabledProvider(&registration, TRUE);
+
+// Force an immediate run (e.g., user opens a dialog)
+PhBoostProvider(&registration, NULL);
+
+// Teardown
+PhUnregisterProvider(&registration);
+PhStopProviderThread(&providerThread);
+PhDeleteProviderThread(&providerThread);
+```
+
+Each registration carries a `RunId` counter that increments on every tick. This lets callbacks distinguish the first run (`RunId == 1`) from subsequent ones, which is useful for deferring expensive initialization.
+
+`PH_PROVIDER_THREAD` supports a high-resolution mode (set with `PhSetHighResolutionProvider`) for sub-millisecond timer accuracy on platforms that support it.
+
+## GUI support
+
+Source: `phlib/include/treenew.h`, `phlib/include/graph.h`
+
+### PhTreeNew — virtual tree-list control
+
+`PhTreeNew` is a custom `HWND`-based control (window class `L"PhTreeNew"`) that implements a high-performance virtual tree-list. It supports fixed and scrollable columns, inline editing, custom drawing per cell, and hierarchical expand/collapse. The process, service, and network views in the main window all use this control.
+
+Each row in the tree is a `PH_TREENEW_NODE`. The control calls back into your code to retrieve cell text (`TextCache` / `TextCacheSize` fields) and drawing parameters rather than storing them internally.
+
+```c
+// Column definition
+PH_TREENEW_COLUMN column = { 0 };
+column.Id      = COLUMN_ID_NAME;
+column.Text    = L"Name";
+column.Width   = 200;
+column.Visible = TRUE;
+```
+
+### PhGraph — history graph control
+
+`PhGraph` is a GDI-based graph control (window class `L"PhGraph"`) that draws one or two data lines over a configurable time window. It reads `FLOAT` samples from caller-supplied arrays and supports grid lines, logarithmic Y scaling, and overlay text.
+
+```c
+PH_GRAPH_DRAW_INFO drawInfo = { 0 };
+drawInfo.Width        = rect.right - rect.left;
+drawInfo.Height       = rect.bottom - rect.top;
+drawInfo.LineDataCount = sampleCount;
+drawInfo.LineData1     = cpuSamples;     // PFLOAT, values in [0.0, 1.0]
+drawInfo.LineColor1    = RGB(0, 97, 205);
+drawInfo.BackColor     = RGB(0, 0, 0);
+```
+
+## Native API wrappers
+
+Source: `phlib/include/phnative.h`
+
+`phnative.h` provides `PHLIBAPI`-exported wrappers over the raw `Nt*` / `Zw*` functions declared in `phnt`. The wrappers handle common patterns such as trying multiple access masks in order, normalizing error codes, and converting between phlib types and NT structures.
+
+```c
+// Open a process with the best available access — tries
+// PROCESS_QUERY_INFORMATION first, then PROCESS_QUERY_LIMITED_INFORMATION
+HANDLE processHandle;
+NTSTATUS status = PhOpenProcess(
+    &processHandle,
+    PROCESS_QUERY_INFORMATION,
+    processId
+    );
+
+// Open a thread handle
+HANDLE threadHandle;
+PhOpenThread(&threadHandle, THREAD_QUERY_INFORMATION, threadId);
+
+// Read another process's virtual memory
+BYTE buffer[4096];
+PhReadVirtualMemory(processHandle, baseAddress, buffer, sizeof(buffer), NULL);
+```
+
+Well-known pseudo-PIDs are also defined here:
+
+```c
+#define SYSTEM_IDLE_PROCESS_ID  ((HANDLE)0)
+#define SYSTEM_PROCESS_ID       ((HANDLE)4)
+#define CURRENT_PROCESS_ID      ((HANDLE)(LONG_PTR)-1)
+```
+
+`phnative.h` exposes hundreds of additional wrappers for threads, tokens, jobs, handles, files, sections, and security descriptors. The naming convention matches the underlying NT functions: `PhGetThreadBasicInformation`, `PhGetThreadStartAddress`, `PhGetThreadTeb`, and so on.
+
+## Naming and coding conventions
+
+<AccordionGroup>
+  <Accordion title="Prefix rules">
+    - `Ph` / `PH_` — public names in phlib
+    - `Php` / `PHP_` — private (file-internal) names in phlib
+    - Functions and variables without a prefix must be `static`
+
+    Examples: `PhCreateObject`, `PH_STRING`, `PhpAllocateObject` (private helper).
+  </Accordion>
+
+  <Accordion title="Object lifecycle vocabulary">
+    - **Allocate** — allocate raw memory without initialization
+    - **Create** — allocate and initialize; always pairs with the reference-counting system
+    - **Free** / **Destroy** — release objects created with Allocate or Create
+    - **Initialize** — initialize an object with caller-supplied storage (stack or static)
+    - **Delete** — paired with Initialize; does not free the storage
+
+    Examples: `PhCreateList` / `PhDereferenceObject`, `PhInitializeArray` / `PhDeleteArray`.
+  </Accordion>
+
+  <Accordion title="SAL annotations">
+    All function parameters use SAL annotations: `_In_`, `_Out_`, `_Inout_`, `_In_opt_`, and so on. Functions that fail are guaranteed not to modify any `_Out_` parameters unless stated otherwise.
+  </Accordion>
+
+  <Accordion title="Error handling">
+    Functions return either a `NTSTATUS` value (check with `NT_SUCCESS`), a `BOOLEAN` (`TRUE` = success), or the result itself (`NULL` = failure). Exceptions (SEH) are reserved for unrecoverable conditions. `PhAllocate` raises on allocation failure so callers do not have to check every allocation.
+  </Accordion>
+</AccordionGroup>
+
+<CardGroup cols={2}>
+  <Card title="Architecture overview" icon="diagram-project" href="/dev/architecture">
+    How phlib fits into the broader component map.
+  </Card>
+  <Card title="phnt — Native API headers" icon="file-code" href="/dev/phnt">
+    The Native API header collection that phlib is built on.
+  </Card>
+  <Card title="Plugin overview" icon="puzzle-piece" href="/dev/plugin-overview">
+    How to consume phlib APIs from your own plugin.
+  </Card>
+  <Card title="Building from source" icon="hammer" href="/dev/building">
+    How to compile phlib as part of the full System Informer build.
+  </Card>
+</CardGroup>

@@ -1,0 +1,141 @@
+---
+title: "System information"
+description: "System-wide graphs for CPU (per core), memory, I/O, and network usage, with statistics panels and a resizable summary window."
+---
+
+The System Information window gives you a high-level, real-time overview of the entire machine. It opens in its own resizable window, independent of the main process list, so you can keep it visible while you work.
+
+Open it from the main window by clicking the **CPU**, **Memory**, or **I/O** graph in the toolbar, by pressing **Ctrl+I**, or by going to **View → System information**.
+
+## Summary view
+
+When you first open System Information, you see the **summary view**: a stack of colored graphs — one per section — running across the full width of the window. Each graph shows recent history (the last several minutes by default).
+
+The sections built into System Informer are:
+
+<CardGroup cols={2}>
+  <Card title="CPU" icon="microchip">
+    Overall CPU usage split into kernel (darker) and user (lighter) components. Left-side text shows the current usage percentage and the top CPU-consuming process.
+  </Card>
+  <Card title="Memory" icon="memory">
+    Physical memory usage (committed and in use) alongside the commit charge (page file usage). Left-side text shows total physical memory, available memory, and commit totals.
+  </Card>
+  <Card title="I/O" icon="hard-drive">
+    Disk I/O read+other rate (one color) and write rate (another). Left-side text shows the current rates and the process responsible for the highest I/O in each interval.
+  </Card>
+  <Card title="Network" icon="network-wired">
+    Network receive and send rates across all adapters. Added by the **ExtendedTools** plugin; not present by default.
+  </Card>
+</CardGroup>
+
+Plugins can register additional sections. The **ExtendedTools** plugin adds GPU graphs (one per GPU adapter).
+
+## Section view
+
+Click any graph (or press **1**–**9** on the keyboard) to enter **section view** for that resource. The selected section expands to fill the right side of the window with a detailed embedded panel, while the other sections shrink to mini-graphs on the left.
+
+Return to the summary view by clicking **Back**, pressing **Backspace**, or using the Tab key to select "Back" and pressing Space.
+
+### CPU section
+
+<Tabs>
+  <Tab title="Overview">
+    The CPU section panel shows:
+
+    - A large graph of overall CPU usage (kernel + user) for the recent history period
+    - Current kernel usage percentage and user usage percentage
+    - CPU frequency (if available)
+    - Total process count, thread count, and handle count
+    - System uptime
+    - Context switches per second and interrupts per second (requires the kernel driver)
+  </Tab>
+  <Tab title="Per-core graphs">
+    Below the main graph is a grid of small graphs — one per logical CPU core. Each per-core graph uses the same kernel/user color split as the main graph.
+
+    This lets you identify core imbalance (e.g., a single-threaded process pinning one core while others are idle), NUMA node effects, and asymmetric scheduling on hybrid CPUs (P-cores vs E-cores on Intel 12th gen and later).
+  </Tab>
+</Tabs>
+
+### Memory section
+
+The memory panel shows:
+
+- **Physical memory** graph: total physical RAM, in-use pages (colored), standby/cache pages, and free pages
+- **Commit charge** graph: total committed virtual memory vs. the commit limit (physical RAM + page file size)
+- **Paged pool** graph: kernel paged pool usage
+- **Kernel non-paged pool** usage (numeric)
+
+Statistics displayed as numbers:
+
+| Statistic | Description |
+|---|---|
+| **Physical** | Total installed physical RAM |
+| **Available** | Physical memory immediately available for allocation |
+| **Cached** | Standby + modified pages (file cache) |
+| **In use** | Physical pages mapped to active working sets |
+| **Modified** | Dirty pages waiting to be written to disk or the page file |
+| **Commit (current)** | Total committed virtual memory across all processes and the kernel |
+| **Commit (limit)** | Maximum commit charge = physical RAM + page file capacity |
+| **Commit (peak)** | Highest commit charge since the last boot |
+| **Paged pool** | Current kernel paged pool usage |
+| **Non-paged pool** | Current kernel non-paged pool usage |
+
+### I/O section
+
+The I/O panel shows:
+
+- A large stacked graph of I/O read+other bytes/sec and write bytes/sec
+- Current read rate, write rate, and other rate
+- The process currently generating the most I/O (updated each interval)
+- Cumulative I/O bytes since System Informer started
+
+### GPU section (ExtendedTools plugin)
+
+When the **ExtendedTools** plugin is enabled, one section per GPU adapter appears in the System Information window.
+
+Each GPU section shows:
+
+- GPU engine utilization graph (3D engine, video decode, video encode, compute)
+- Dedicated video memory usage and limit
+- Shared GPU memory usage
+- Current GPU power level (if the adapter exposes it)
+- GPU temperature (if the adapter exposes it via NVAPI or similar)
+
+<Note>
+  The GPU section requires the **ExtendedTools** plugin. Enable it in **Options → Plugins**.
+</Note>
+
+## Statistics panels
+
+The left-side text panels next to each mini-graph in summary view display:
+
+| Section | Left-side text |
+|---|---|
+| CPU | Usage %, process with highest CPU in the last interval |
+| Memory | Physical in-use / total, commit charge |
+| I/O | Read+other rate, write rate, top I/O process |
+
+In section view, the statistics expand to show much more detail (see each section above).
+
+## Mini information window (tray icon tooltip)
+
+System Informer places a notification icon in the taskbar tray. Hovering over it shows a compact summary:
+
+- CPU usage percentage
+- Commit charge percentage
+- Physical memory percentage
+- I/O rate
+
+Right-clicking the tray icon gives you quick access to **System Information**, **Run as administrator**, and other common actions.
+
+## History length
+
+The number of data points retained in each graph is controlled by **Options → General → Graph history**. The default is 60 seconds. Increasing this lets you see longer trends at the cost of slightly more memory.
+
+## Customizing colors
+
+All graph colors — CPU kernel, CPU user, private bytes, physical memory, I/O read, I/O write — can be changed in **Options → Graph colors**.
+
+<Tip>
+  Click any mini-graph in the tray tooltip or the toolbar to jump directly to the corresponding section in the System Information window.
+</Tip>

@@ -1,0 +1,139 @@
+---
+title: "Building from source"
+description: "How to build System Informer, its plugins, and the SDK from the source repository."
+---
+
+## Prerequisites
+
+- **Visual Studio 2022 or later** — the free [Community Edition](https://www.visualstudio.com/vs/community/) works. Make sure the **Desktop development with C++** workload is installed.
+- **Windows SDK** — installed automatically with the C++ workload, or via the Visual Studio Installer.
+
+## Build steps
+
+<Steps>
+  <Step title="Clone the repository">
+    ```cmd
+    git clone https://github.com/winsiderss/systeminformer.git
+    cd systeminformer
+    ```
+  </Step>
+
+  <Step title="Run build_init.cmd">
+    From the repository root, run the initialization script. This builds the third-party libraries and internal build tools that all subsequent steps depend on.
+
+    ```cmd
+    build\build_init.cmd
+    ```
+
+    <Note>
+      You only need to run `build_init.cmd` once after cloning. Run it again if you pull changes that update the third-party libraries or build tools, or if you switch to a different compiler.
+    </Note>
+  </Step>
+
+  <Step title="Compile the project">
+    Run the release build script to compile System Informer and all core components:
+
+    ```cmd
+    build\build_release.cmd
+    ```
+
+    Alternatively, open **`SystemInformer.sln`** in Visual Studio and build from the IDE.
+  </Step>
+</Steps>
+
+## Build outputs
+
+Compiled binaries are placed in the `bin\` directory at the repository root, organized by configuration and architecture (for example, `bin\Release64\`). The CMake build system uses `bin-cmake\` instead.
+
+## Building plugins separately
+
+Plugins are in a separate solution. Open **`Plugins.sln`** in Visual Studio, or build from the command line using MSBuild targeting that solution. Plugin binaries are output alongside the main binaries in `bin\`.
+
+<Warning>
+  Plugins you build locally will not be signed with the official key pair. When the kernel driver is enabled, unsigned plugins are loaded with restricted driver access. See the [kernel driver page](/dev/kernel-driver) for how to set up a development key pair.
+</Warning>
+
+## Building the SDK
+
+The SDK packages headers and import libraries for all supported configurations and architectures. Run:
+
+```cmd
+build\build_sdk.cmd
+```
+
+This invokes `CustomBuildTool.exe` for each combination of configuration (Debug/Release) and architecture (Win32, x64, ARM64):
+
+```cmd
+CustomBuildTool.exe -sdk -Debug  -Win32 -verbose
+CustomBuildTool.exe -sdk -Debug  -x64   -verbose
+CustomBuildTool.exe -sdk -Debug  -arm64 -verbose
+CustomBuildTool.exe -sdk -Release -Win32 -verbose
+CustomBuildTool.exe -sdk -Release -x64   -verbose
+CustomBuildTool.exe -sdk -Release -arm64 -verbose
+```
+
+<Note>
+  `build_init.cmd` must have been run at least once before `build_sdk.cmd` will work, because `CustomBuildTool.exe` is itself a product of the init step.
+</Note>
+
+## Debug builds
+
+To produce a debug build, use:
+
+```cmd
+build\build_debug.cmd
+```
+
+This calls `CustomBuildTool.exe -debug` and outputs binaries to the debug subdirectory under `bin\`.
+
+## CMake support
+
+The repository includes a `CMakeLists.txt` for use with CMake 3.30 or later. CMake support covers the core projects by default; plugins and kernel mode projects can be toggled via CMake options:
+
+| Option | Default | Description |
+|---|---|---|
+| `SI_WITH_CORE` | `ON` | Builds `SystemInformer`, `phnt`, `phlib`, and `tools` |
+| `SI_WITH_PLUGINS` | `OFF` | Builds the plugins |
+| `SI_WITH_KERNEL` | `OFF` | Kernel mode projects (not yet supported) |
+| `SI_WITH_PREFAST` | `OFF` | Enables PREfast static analysis |
+| `SI_WITH_WPP_USER` | `OFF` | Enables user-mode WPP tracing |
+| `SI_WITH_WPP_KERNEL` | `ON` | Enables kernel-mode WPP tracing |
+
+CMake outputs go to `bin-cmake\` rather than `bin\`.
+
+<Note>
+  The MSBuild-based scripts (`build_release.cmd`, `build_debug.cmd`) remain the primary and most complete build path. CMake support is under active development.
+</Note>
+
+## Common errors
+
+<AccordionGroup>
+  <Accordion title="LINK : fatal error C1047 — thirdparty.lib mismatch">
+    This error means `thirdparty.lib` was compiled with a different compiler version than the one currently active in your environment. Run:
+
+    ```cmd
+    build\build_thirdparty.cmd
+    ```
+
+    This rebuilds `thirdparty.lib` for all configurations and architectures using your current compiler, resolving the mismatch. If you are still unsure after an upgrade or environment change, running `build_init.cmd` again covers this step.
+  </Accordion>
+
+  <Accordion title="Plugins not loading when the kernel driver is enabled">
+    This is expected behavior. The driver enforces a security policy that restricts access from processes loaded with unsigned modules. Locally built plugins do not carry the official `.sig` signature, so the driver limits their access.
+
+    You have two options:
+
+    1. **Set up a development key pair** — follow the steps on the [kernel driver page](/dev/kernel-driver) to generate your own key pair, register the public key in the driver, and sign your builds with it.
+    2. **Disable image load denial** — in System Informer's advanced settings, disable the image load denial option. The driver will still load, but any process with unsigned plugins will receive restricted access rather than being denied entirely.
+  </Accordion>
+
+  <Accordion title="CustomBuildTool.exe not found">
+    This means `build_init.cmd` has not been run, or it failed partway through. Run:
+
+    ```cmd
+    build\build_init.cmd
+    ```
+
+    Check the output for any errors during the third-party or tools build steps.
+  </Accordion>
+</AccordionGroup>

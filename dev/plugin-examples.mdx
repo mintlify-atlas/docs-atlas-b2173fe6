@@ -1,0 +1,613 @@
+---
+title: "Plugin examples"
+description: "Worked code examples extracted from the bundled System Informer plugins, covering registration, menu items, custom columns, and System Information sections."
+---
+
+All code on this page is extracted verbatim from the bundled plugin sources. Nothing is invented or paraphrased.
+
+<Tabs>
+  <Tab title="DLL registration skeleton">
+
+The following pattern, taken from `plugins/NetworkTools/main.c` and `plugins/DotNetTools/main.c`, shows the minimal structure every plugin must follow.
+
+**Global declarations** — one `PPH_PLUGIN` and one `PH_CALLBACK_REGISTRATION` per callback you register:
+
+```c
+PPH_PLUGIN PluginInstance;
+PH_CALLBACK_REGISTRATION PluginLoadCallbackRegistration;
+PH_CALLBACK_REGISTRATION PluginUnloadCallbackRegistration;
+PH_CALLBACK_REGISTRATION PluginTreeNewMessageCallbackRegistration;
+PH_CALLBACK_REGISTRATION ProcessPropertiesInitializingCallbackRegistration;
+```
+
+**`LoadCallback`** — read settings, do not touch the UI:
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI LoadCallback(
+    _In_opt_ PVOID Parameter,
+    _In_opt_ PVOID Context
+    )
+{
+    NOTHING;
+}
+```
+
+**`UnloadCallback`** — respect `SessionEnding`:
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI UnloadCallback(
+    _In_opt_ PVOID Parameter,
+    _In_opt_ PVOID Context
+    )
+{
+    NOTHING;
+}
+```
+
+**`DllMain`** — register the plugin, fill in metadata, subscribe to callbacks, declare settings:
+
+```c
+LOGICAL DllMain(
+    _In_ HINSTANCE Instance,
+    _In_ ULONG Reason,
+    _Reserved_ PVOID Reserved
+    )
+{
+    switch (Reason)
+    {
+    case DLL_PROCESS_ATTACH:
+        {
+            PPH_PLUGIN_INFORMATION info;
+            PH_SETTING_CREATE settings[] =
+            {
+                { StringSettingType, SETTING_NAME_ASM_TREE_LIST_COLUMNS, L"" },
+                { IntegerSettingType, SETTING_NAME_ASM_TREE_LIST_FLAGS, L"0" },
+                { IntegerPairSettingType, SETTING_NAME_ASM_TREE_LIST_SORT, L"0,0" },
+            };
+
+            PluginInstance = PhRegisterPlugin(PLUGIN_NAME, Instance, &info);
+
+            if (!PluginInstance)
+                return FALSE;
+
+            info->DisplayName = L".NET Tools";
+            info->Description =
+                L"Adds .NET performance counters, assembly information, "
+                L"thread stack support, and more.";
+
+            PhRegisterCallback(
+                PhGetPluginCallback(PluginInstance, PluginCallbackLoad),
+                LoadCallback,
+                NULL,
+                &PluginLoadCallbackRegistration
+                );
+            PhRegisterCallback(
+                PhGetPluginCallback(PluginInstance, PluginCallbackUnload),
+                UnloadCallback,
+                NULL,
+                &PluginUnloadCallbackRegistration
+                );
+            PhRegisterCallback(
+                PhGetPluginCallback(PluginInstance, PluginCallbackTreeNewMessage),
+                TreeNewMessageCallback,
+                NULL,
+                &PluginTreeNewMessageCallbackRegistration
+                );
+            PhRegisterCallback(
+                PhGetGeneralCallback(GeneralCallbackProcessPropertiesInitializing),
+                ProcessPropertiesInitializingCallback,
+                NULL,
+                &ProcessPropertiesInitializingCallbackRegistration
+                );
+
+            PhAddSettings(settings, RTL_NUMBER_OF(settings));
+        }
+        break;
+    }
+
+    return TRUE;
+}
+```
+
+*(Source: `plugins/DotNetTools/main.c`)*
+
+  </Tab>
+
+  <Tab title="Adding a menu item">
+
+This example, from `plugins/NetworkTools/main.c`, adds Ping, Traceroute, and Whois entries to the network connection context menu.
+
+**Step 1 — register the callback in `DllMain`:**
+
+```c
+PhRegisterCallback(
+    PhGetGeneralCallback(GeneralCallbackNetworkMenuInitializing),
+    NetworkMenuInitializingCallback,
+    NULL,
+    &NetworkMenuInitializingCallbackRegistration
+    );
+PhRegisterCallback(
+    PhGetPluginCallback(PluginInstance, PluginCallbackMenuItem),
+    MenuItemCallback,
+    NULL,
+    &PluginMenuItemCallbackRegistration
+    );
+```
+
+**Step 2 — populate the menu:**
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI NetworkMenuInitializingCallback(
+    _In_ PVOID Parameter,
+    _In_opt_ PVOID Context
+    )
+{
+    PPH_PLUGIN_MENU_INFORMATION menuInfo = (PPH_PLUGIN_MENU_INFORMATION)Parameter;
+    PPH_NETWORK_ITEM networkItem;
+    PPH_EMENU_ITEM whoisMenu;
+    PPH_EMENU_ITEM traceMenu;
+    PPH_EMENU_ITEM pingMenu;
+
+    if (menuInfo->u.Network.NumberOfNetworkItems == 1)
+        networkItem = menuInfo->u.Network.NetworkItems[0];
+    else
+        networkItem = NULL;
+
+    PhInsertEMenuItem(menuInfo->Menu,
+        pingMenu  = PhPluginCreateEMenuItem(PluginInstance, 0, NETWORK_ACTION_PING,       L"&Ping",       networkItem), 0);
+    PhInsertEMenuItem(menuInfo->Menu,
+        traceMenu = PhPluginCreateEMenuItem(PluginInstance, 0, NETWORK_ACTION_TRACEROUTE, L"&Traceroute", networkItem), 1);
+    PhInsertEMenuItem(menuInfo->Menu,
+        whoisMenu = PhPluginCreateEMenuItem(PluginInstance, 0, NETWORK_ACTION_WHOIS,      L"&Whois",      networkItem), 2);
+    PhInsertEMenuItem(menuInfo->Menu, PhCreateEMenuSeparator(), 3);
+
+    if (networkItem)
+    {
+        if (PhIsNullIpAddress(&networkItem->RemoteEndpoint.Address))
+        {
+            PhSetDisabledEMenuItem(whoisMenu);
+            PhSetDisabledEMenuItem(traceMenu);
+            PhSetDisabledEMenuItem(pingMenu);
+        }
+    }
+    else
+    {
+        PhSetDisabledEMenuItem(whoisMenu);
+        PhSetDisabledEMenuItem(traceMenu);
+        PhSetDisabledEMenuItem(pingMenu);
+    }
+}
+```
+
+**Step 3 — handle the selection:**
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI MenuItemCallback(
+    _In_ PVOID Parameter,
+    _In_opt_ PVOID Context
+    )
+{
+    PPH_PLUGIN_MENU_ITEM menuItem = (PPH_PLUGIN_MENU_ITEM)Parameter;
+
+    switch (menuItem->Id)
+    {
+    case NETWORK_ACTION_PING:
+        ShowPingWindow(menuItem->OwnerWindow, (PPH_NETWORK_ITEM)menuItem->Context);
+        break;
+    case NETWORK_ACTION_TRACEROUTE:
+        ShowTracertWindow(menuItem->OwnerWindow, (PPH_NETWORK_ITEM)menuItem->Context);
+        break;
+    case NETWORK_ACTION_WHOIS:
+        ShowWhoisWindow(menuItem->OwnerWindow, (PPH_NETWORK_ITEM)menuItem->Context);
+        break;
+    }
+}
+```
+
+*(Source: `plugins/NetworkTools/main.c`)*
+
+The same pattern works for the process context menu (`GeneralCallbackProcessMenuInitializing`). Inspect `menuInfo->u.Process.NumberOfProcesses` and `menuInfo->u.Process.Processes[0]` to access the selected process.
+
+  </Tab>
+
+  <Tab title="Adding a column">
+
+This example, from `plugins/NetworkTools/main.c`, adds several columns — including an owner-drawn country flag column — to the Network tab.
+
+**Step 1 — declare a sort function:**
+
+```c
+_Function_class_(PH_PLUGIN_TREENEW_SORT_FUNCTION)
+LONG NTAPI NetworkServiceSortFunction(
+    _In_ PVOID Node1,
+    _In_ PVOID Node2,
+    _In_ ULONG SubId,
+    _In_ PH_SORT_ORDER SortOrder,
+    _In_ PVOID Context
+    )
+{
+    PPH_NETWORK_NODE node1 = Node1;
+    PPH_NETWORK_NODE node2 = Node2;
+    PNETWORK_EXTENSION extension1 = GetNetworkItemExtension(node1->NetworkItem);
+    PNETWORK_EXTENSION extension2 = GetNetworkItemExtension(node2->NetworkItem);
+
+    switch (SubId)
+    {
+    case NETWORK_COLUMN_ID_REMOTE_COUNTRY:
+        return PhCompareStringWithNullSortOrder(
+            extension1->RemoteCountryName,
+            extension2->RemoteCountryName,
+            SortOrder, TRUE);
+    case NETWORK_COLUMN_ID_BYTES_IN:
+        return uint64cmp(extension1->NumberOfBytesIn, extension2->NumberOfBytesIn);
+    case NETWORK_COLUMN_ID_LATENCY:
+        return uintcmp(extension1->SampleRtt, extension2->SampleRtt);
+    }
+
+    return 0;
+}
+```
+
+**Step 2 — register the columns in the `GeneralCallbackNetworkTreeNewInitializing` handler:**
+
+```c
+VOID NTAPI NetworkTreeNewInitializingCallback(
+    _In_ PVOID Parameter,
+    _In_ PVOID Context
+    )
+{
+    PPH_PLUGIN_TREENEW_INFORMATION info = Parameter;
+    PH_TREENEW_COLUMN column;
+
+    *(HWND*)Context = info->TreeNewHandle;
+
+    memset(&column, 0, sizeof(PH_TREENEW_COLUMN));
+    column.Text = L"Country";
+    column.Width = 140;
+    column.Alignment = PH_ALIGN_LEFT;
+    column.CustomDraw = TRUE; // owner-draw to show country flags
+    PhPluginAddTreeNewColumn(PluginInstance, info->CmData, &column,
+        NETWORK_COLUMN_ID_REMOTE_COUNTRY, NULL, NetworkServiceSortFunction);
+
+    memset(&column, 0, sizeof(PH_TREENEW_COLUMN));
+    column.Text = L"Total bytes in";
+    column.Width = 80;
+    column.Alignment = PH_ALIGN_LEFT;
+    PhPluginAddTreeNewColumn(PluginInstance, info->CmData, &column,
+        NETWORK_COLUMN_ID_BYTES_IN, NULL, NetworkServiceSortFunction);
+
+    memset(&column, 0, sizeof(PH_TREENEW_COLUMN));
+    column.Text = L"Latency (ms)";
+    column.Width = 80;
+    column.Alignment = PH_ALIGN_LEFT;
+    PhPluginAddTreeNewColumn(PluginInstance, info->CmData, &column,
+        NETWORK_COLUMN_ID_LATENCY, NULL, NetworkServiceSortFunction);
+}
+```
+
+**Step 3 — supply cell text and custom drawing in `PluginCallbackTreeNewMessage`:**
+
+```c
+VOID NTAPI TreeNewMessageCallback(
+    _In_ PVOID Parameter,
+    _In_ PVOID Context
+    )
+{
+    PPH_PLUGIN_TREENEW_MESSAGE message = Parameter;
+
+    switch (message->Message)
+    {
+    case TreeNewGetCellText:
+        {
+            if (message->TreeNewHandle == NetworkTreeNewHandle)
+            {
+                PPH_TREENEW_GET_CELL_TEXT getCellText = message->Parameter1;
+                PPH_NETWORK_NODE networkNode = (PPH_NETWORK_NODE)getCellText->Node;
+                PNETWORK_EXTENSION extension =
+                    GetNetworkItemExtension(networkNode->NetworkItem);
+
+                switch (message->SubId)
+                {
+                case NETWORK_COLUMN_ID_REMOTE_COUNTRY:
+                    getCellText->Text = PhGetStringRef(extension->RemoteCountryName);
+                    break;
+                case NETWORK_COLUMN_ID_BYTES_IN:
+                    getCellText->Text = PhGetStringRef(extension->BytesIn);
+                    break;
+                case NETWORK_COLUMN_ID_LATENCY:
+                    getCellText->Text = PhGetStringRef(extension->LatencyText);
+                    break;
+                }
+
+                getCellText->Flags = TN_CACHE;
+            }
+        }
+        break;
+    case TreeNewCustomDraw:
+        {
+            PPH_TREENEW_CUSTOM_DRAW customDraw = message->Parameter1;
+            PPH_NETWORK_NODE networkNode = (PPH_NETWORK_NODE)customDraw->Node;
+            PNETWORK_EXTENSION extension =
+                GetNetworkItemExtension(networkNode->NetworkItem);
+            HDC hdc = customDraw->Dc;
+            RECT rect = customDraw->CellRect;
+
+            if (message->SubId != NETWORK_COLUMN_ID_REMOTE_COUNTRY)
+                break;
+
+            if (rect.right - rect.left <= 1)
+                break;
+
+            rect.left += 5;
+
+            if (extension->RemoteCountryName)
+            {
+                if (extension->CountryIconIndex != INT_ERROR)
+                {
+                    DrawCountryIcon(hdc, rect, extension->CountryIconIndex);
+                    rect.left += GeoCountryImageSize.cx + 2;
+                }
+
+                DrawText(
+                    hdc,
+                    extension->RemoteCountryName->Buffer,
+                    (INT)extension->RemoteCountryName->Length / sizeof(WCHAR),
+                    &rect,
+                    DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS | DT_SINGLELINE
+                    );
+            }
+        }
+        break;
+    }
+}
+```
+
+*(Source: `plugins/NetworkTools/main.c`)*
+
+<Tip>
+  Attach per-item data by registering an object extension with `PhPluginSetObjectExtension`. NetworkTools stores its `NETWORK_EXTENSION` struct on each `PPH_NETWORK_ITEM` this way, then retrieves it with `PhPluginGetObjectExtension`.
+</Tip>
+
+  </Tab>
+
+  <Tab title="Adding a System Information section">
+
+ExtendedTools registers GPU, NPU, and ETW panels in the System Information window. The handler below (from `plugins/ExtendedTools/main.c`) shows the general pattern:
+
+**Register the callback in `DllMain`:**
+
+```c
+PhRegisterCallback(
+    PhGetGeneralCallback(GeneralCallbackSystemInformationInitializing),
+    SystemInformationInitializingCallback,
+    NULL,
+    &SystemInformationInitializingCallbackRegistration
+    );
+```
+
+**Implement the callback:**
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI SystemInformationInitializingCallback(
+    _In_ PVOID Parameter,
+    _In_opt_ PVOID Context
+    )
+{
+    if (EtGpuEnabled)
+        EtGpuSystemInformationInitializing(Parameter);
+    if (EtNpuEnabled)
+        EtNpuSystemInformationInitializing(Parameter);
+    if (EtEtwEnabled && PhGetIntegerSetting(SETTING_NAME_ENABLE_SYSINFO_GRAPHS))
+        EtEtwSystemInformationInitializing(Parameter);
+}
+```
+
+Inside each `*SystemInformationInitializing` helper, `Parameter` is cast to `PPH_PLUGIN_SYSINFO_POINTERS` and `CreateSection` is called:
+
+```c
+// Inside EtGpuSystemInformationInitializing(Parameter):
+PPH_PLUGIN_SYSINFO_POINTERS sysInfo = (PPH_PLUGIN_SYSINFO_POINTERS)Parameter;
+
+PH_SYSINFO_SECTION section;
+memset(&section, 0, sizeof(PH_SYSINFO_SECTION));
+PhInitializeStringRef(&section.Name, L"GPU");
+section.Flags = 0;
+section.Callback = EtpGpuSysInfoSectionCallback;
+section.Context = NULL;
+
+sysInfo->CreateSection(&section);
+```
+
+*(Source: `plugins/ExtendedTools/main.c` — `SystemInformationInitializingCallback` and surrounding helpers)*
+
+  </Tab>
+
+  <Tab title="Process properties page">
+
+DotNetTools adds Assemblies and Performance Counters tabs to the process properties dialog for .NET processes.
+
+**Register in `DllMain`:**
+
+```c
+PhRegisterCallback(
+    PhGetGeneralCallback(GeneralCallbackProcessPropertiesInitializing),
+    ProcessPropertiesInitializingCallback,
+    NULL,
+    &ProcessPropertiesInitializingCallbackRegistration
+    );
+```
+
+**Implement the callback:**
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI ProcessPropertiesInitializingCallback(
+    _In_ PVOID Parameter,
+    _In_ PVOID Context
+    )
+{
+    PPH_PLUGIN_PROCESS_PROPCONTEXT propContext = Parameter;
+    BOOLEAN isDotNet = FALSE;
+    ULONG flags = 0;
+
+    if (NT_SUCCESS(PhGetProcessIsDotNetEx(
+        propContext->ProcessItem->ProcessId,
+        propContext->ProcessItem->QueryHandle,
+        propContext->ProcessItem->IsImmersive ? 0 : PH_CLR_USE_SECTION_CHECK,
+        &isDotNet,
+        &flags
+        )))
+    {
+        if (isDotNet)
+        {
+            AddAsmPageToPropContext(propContext);
+            AddPerfPageToPropContext(propContext);
+        }
+        else if (flags & PH_CLR_CORELIB_PRESENT)
+        {
+            isDotNet = TRUE;
+            AddAsmPageToPropContext(propContext);
+        }
+        else if (flags & PH_CLR_CORE_3_0_ABOVE)
+        {
+            isDotNet = TRUE;
+            AddAsmPageToPropContext(propContext);
+        }
+
+        if (propContext->ProcessItem->IsDotNet != isDotNet)
+            propContext->ProcessItem->UpdateIsDotNet = TRUE;
+    }
+}
+```
+
+*(Source: `plugins/DotNetTools/main.c`)*
+
+`AddAsmPageToPropContext` and `AddPerfPageToPropContext` create `HPROPSHEETPAGE` handles via `CreatePropertySheetPage` and add them through `PhAddProcessPropPage`.
+
+  </Tab>
+</Tabs>
+
+---
+
+## Object extensions
+
+When a plugin needs to store custom data alongside a host object (process item, network item, thread item, etc.), it registers an object extension. The memory is allocated and zeroed by the host when the object is created, and freed when it is destroyed.
+
+From `plugins/NetworkTools/main.c`:
+
+```c
+// In DllMain:
+PhPluginSetObjectExtension(
+    PluginInstance,
+    EmNetworkItemType,
+    sizeof(NETWORK_EXTENSION),
+    NetworkItemCreateCallback,
+    NetworkItemDeleteCallback
+    );
+
+// Create callback — called when a new PPH_NETWORK_ITEM is created:
+VOID NTAPI NetworkItemCreateCallback(
+    _In_ PVOID Object,
+    _In_ PH_EM_OBJECT_TYPE ObjectType,
+    _In_ PVOID Extension
+    )
+{
+    PPH_NETWORK_ITEM networkItem = Object;
+    PNETWORK_EXTENSION extension = Extension;
+
+    memset(extension, 0, sizeof(NETWORK_EXTENSION));
+    extension->NetworkItem = networkItem;
+    extension->CountryIconIndex = INT_ERROR;
+
+    if (NetworkExtensionEnabled)
+    {
+        InsertTailList(&NetworkExtensionListHead, &extension->ListEntry);
+    }
+}
+
+// Delete callback — called when the PPH_NETWORK_ITEM is destroyed:
+VOID NTAPI NetworkItemDeleteCallback(
+    _In_ PVOID Object,
+    _In_ PH_EM_OBJECT_TYPE ObjectType,
+    _In_ PVOID Extension
+    )
+{
+    PNETWORK_EXTENSION extension = Extension;
+
+    if (NetworkExtensionEnabled)
+    {
+        RemoveEntryList(&extension->ListEntry);
+    }
+
+    if (extension->RemoteCountryName)
+        PhDereferenceObject(extension->RemoteCountryName);
+    if (extension->BytesIn)
+        PhDereferenceObject(extension->BytesIn);
+    if (extension->BytesOut)
+        PhDereferenceObject(extension->BytesOut);
+}
+
+// Retrieve at any time:
+PNETWORK_EXTENSION GetNetworkItemExtension(
+    _In_ PPH_NETWORK_ITEM NetworkItem
+    )
+{
+    return PhPluginGetObjectExtension(PluginInstance, NetworkItem, EmNetworkItemType);
+}
+```
+
+The `PH_EM_OBJECT_TYPE` enumeration lists all extensible object types:
+
+```c
+typedef enum _PH_EM_OBJECT_TYPE
+{
+    EmProcessItemType,
+    EmProcessNodeType,
+    EmServiceItemType,
+    EmServiceNodeType,
+    EmNetworkItemType,
+    EmNetworkNodeType,
+    EmThreadItemType,
+    EmThreadNodeType,
+    EmModuleItemType,
+    EmModuleNodeType,
+    EmHandleItemType,
+    EmHandleNodeType,
+    EmThreadsContextType,
+    EmModulesContextType,
+    EmHandlesContextType,
+    EmThreadProviderType,
+    EmModuleProviderType,
+    EmHandleProviderType,
+    EmMemoryNodeType,
+    EmMemoryContextType,
+    EmMaximumObjectType
+} PH_EM_OBJECT_TYPE;
+```
+
+*(Source: `SystemInformer/include/extmgr.h`)*
+
+---
+
+## Further reading
+
+The bundled plugin sources are the best reference material:
+
+| Plugin | Source path |
+|---|---|
+| ExtendedTools | `plugins/ExtendedTools/main.c` |
+| NetworkTools | `plugins/NetworkTools/main.c` |
+| DotNetTools | `plugins/DotNetTools/main.c` |
+| ToolStatus | `plugins/ToolStatus/main.c` |
+| UserNotes | `plugins/UserNotes/main.c` |
+
+The complete callback and API definitions live in:
+
+- `SystemInformer/include/phplug.h` — all callbacks and parameter structures
+- `SystemInformer/include/extmgr.h` — object extension types
+- `SystemInformer/sdk/phdk.h` — top-level SDK include

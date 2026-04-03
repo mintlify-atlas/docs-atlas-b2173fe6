@@ -1,97 +1,74 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "System Informer"
+description: "A free, powerful, multi-purpose tool for monitoring system resources, debugging software, and detecting malware on Windows."
 ---
 
-## Setting up
+System Informer gives you deep visibility into every process, service, network connection, and kernel object on your Windows machine — in real time. Whether you're tracking down a resource hog, analyzing malware, debugging a crash, or building your own tools on top of the Windows Native API, System Informer has you covered.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Download and set up System Informer. No installer required — just extract and run.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Process Monitoring" icon="gauge-high" href="/features/processes">
+    Real-time CPU, memory, I/O, and network graphs for every running process.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Plugin Development" icon="puzzle-piece" href="/dev/plugin-overview">
+    Extend System Informer with your own plugins using the phlib SDK.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Building from Source" icon="hammer" href="/dev/building">
+    Compile System Informer, the kernel driver, and plugins with Visual Studio.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Get started
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Download System Informer">
+    Get the latest release from [systeminformer.com/downloads](https://systeminformer.com/downloads) or from the [GitHub releases](https://github.com/winsiderss/si-builds/releases). No installation required.
+  </Step>
+  <Step title="Run with administrator privileges">
+    Right-click **SystemInformer.exe** and choose **Run as administrator** to unlock full process inspection, kernel driver features, and service management.
+  </Step>
+  <Step title="Explore your system">
+    The **Processes** tab shows every running process with color-coded highlighting. Click any process to open its properties — threads, modules, memory maps, handles, and more.
+  </Step>
+  <Step title="Enable plugins (optional)">
+    Go to **Options → Plugins** to enable bundled plugins for GPU monitoring, .NET inspection, network tools, and ETW-based disk analysis.
+  </Step>
+</Steps>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## What's included
 
-## Need inspiration?
+<CardGroup cols={3}>
+  <Card title="Process Manager" icon="list-tree" href="/features/processes">
+    Inspect threads, modules, handles, memory, tokens, and environment variables for every process.
+  </Card>
+  <Card title="Service Control" icon="gear" href="/features/services">
+    Create, configure, start, stop, and delete Windows services beyond what services.msc offers.
+  </Card>
+  <Card title="Network Monitor" icon="network-wired" href="/features/network">
+    See active TCP/UDP connections attributed to specific processes, with real-time bandwidth.
+  </Card>
+  <Card title="Memory Analysis" icon="memory" href="/features/memory">
+    Browse virtual memory regions, search for strings or patterns, and edit memory live.
+  </Card>
+  <Card title="Handle and Object Browser" icon="folder-open" href="/features/handles">
+    Enumerate kernel handles and named objects — find which process holds a lock on any file.
+  </Card>
+  <Card title="System Information" icon="chart-line" href="/features/system-information">
+    System-wide CPU, memory, I/O, and network graphs with per-CPU core breakdown.
+  </Card>
+  <Card title="PE File Viewer" icon="file-code" href="/tools/pe-viewer">
+    Inspect PE headers, imports, exports, CLR metadata, debug info, and digital signatures.
+  </Card>
+  <Card title="Kernel Driver" icon="microchip" href="/dev/kernel-driver">
+    KSystemInformer provides deep system access for malware detection and tamper resistance.
+  </Card>
+  <Card title="Plugin SDK" icon="code" href="/dev/plugin-sdk">
+    Build custom plugins with full access to phlib, the Native API, and all UI extension points.
+  </Card>
+</CardGroup>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Note>
+  System Informer is 100% free and open source under the MIT License. Brought to you by Winsider Seminars and Solutions, Inc.
+</Note>

@@ -1,0 +1,703 @@
+---
+title: "Plugin callbacks"
+description: "Complete reference for every general and plugin-lifecycle callback in System Informer, including parameter types and thread context."
+---
+
+The callback system is how your plugin receives events from System Informer. There are two independent enumerations:
+
+- **`PH_GENERAL_CALLBACK`** — system-wide events broadcast to all registered listeners.
+- **`PH_PLUGIN_CALLBACK`** — events delivered only to a specific plugin instance.
+
+## Registering a callback
+
+Use `PhRegisterCallback` for both kinds:
+
+```c
+// General callback (broadcast to all plugins):
+PhRegisterCallback(
+    PhGetGeneralCallback(GeneralCallbackProcessesUpdated),
+    MyProcessesUpdatedHandler,
+    NULL,                                   // optional context passed to handler
+    &MyProcessesUpdatedRegistration         // PH_CALLBACK_REGISTRATION, must stay alive
+    );
+
+// Plugin lifecycle callback (only your plugin):
+PhRegisterCallback(
+    PhGetPluginCallback(PluginInstance, PluginCallbackLoad),
+    MyLoadHandler,
+    NULL,
+    &MyLoadRegistration
+    );
+```
+
+Every callback handler has the signature:
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI MyHandler(
+    _In_opt_ PVOID Parameter,
+    _In_opt_ PVOID Context
+    );
+```
+
+`Parameter` carries the event-specific data described below. `Context` is whatever you passed as the third argument to `PhRegisterCallback`.
+
+<Tip>
+  Declare every `PH_CALLBACK_REGISTRATION` as a global or static variable. The registration must remain valid until the plugin is unloaded — passing a stack-allocated registration will corrupt memory when the stack frame is released.
+</Tip>
+
+---
+
+## General callbacks
+
+<Accordion title="Window and lifecycle events">
+
+### `GeneralCallbackMainWindowShowing` — `0`
+**Thread:** main thread  
+**Parameter:** `INT ShowCommand` (the `nCmdShow` value passed to `WinMain`)
+
+Fired when the main window is about to be shown for the first time. This is the right place to create toolbar controls, register layout padding callbacks, and perform other one-time UI setup. ExtendedTools calls `EtInitializeDiskTab`, `EtRegisterToolbarGraphs`, and `EtFramesMonitorStart` here.
+
+---
+
+### `GeneralCallbackMainWindowTabChanged` — `28`
+**Thread:** main thread  
+**Parameter:** `INT NewIndex` (zero-based tab index)
+
+Fired whenever the user switches between the Processes, Services, and Network tabs.
+
+---
+
+### `GeneralCallbackOptionsWindowInitializing` — `34`
+**Thread:** main thread  
+**Parameter:** `PPH_PLUGIN_OPTIONS_POINTERS`
+
+Called when the Options window is opening. Use the `CreateSection` function pointer in the parameter to add your own options page:
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI ShowOptionsCallback(
+    _In_ PVOID Parameter,
+    _In_opt_ PVOID Context
+    )
+{
+    PPH_PLUGIN_OPTIONS_POINTERS optionsEntry = (PPH_PLUGIN_OPTIONS_POINTERS)Parameter;
+
+    optionsEntry->CreateSection(
+        L"NetworkTools",
+        PluginInstance->DllBase,
+        MAKEINTRESOURCE(IDD_OPTIONS),
+        OptionsDlgProc,
+        NULL
+        );
+}
+```
+
+*(Source: `plugins/NetworkTools/main.c`)*
+
+---
+
+### `GeneralCallbackSettingsUpdated` — `85`
+**Thread:** main thread  
+**Parameter:** none
+
+Fired after the user closes the Options dialog with OK, or whenever settings are saved programmatically. Re-read any cached settings here.
+
+</Accordion>
+
+<Accordion title="Process provider events">
+
+### `GeneralCallbackProcessesUpdated` — `1`
+**Thread:** main thread  
+**Parameter:** `ULONG RunId` (cast from `PVOID` via `PtrToUlong`)
+
+Broadcast after every process provider refresh cycle. `RunId` starts at 1 and increments with each cycle. Many plugins skip early cycles:
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI ProcessesUpdatedCallback(
+    _In_opt_ PVOID Parameter,
+    _In_opt_ PVOID Context
+    )
+{
+    ProcessesUpdatedCount = PtrToUlong(Parameter);
+}
+```
+
+*(Source: `plugins/ExtendedTools/main.c`)*
+
+---
+
+### `GeneralCallbackProcessProviderAddedEvent`
+**Thread:** process provider thread  
+**Parameter:** `PPH_PROCESS_ITEM`
+
+Fired when a new process is detected by the provider.
+
+---
+
+### `GeneralCallbackProcessProviderModifiedEvent`
+**Thread:** process provider thread  
+**Parameter:** `PPH_PROCESS_ITEM`
+
+Fired when an existing process item is updated (e.g. name or state changed).
+
+---
+
+### `GeneralCallbackProcessProviderRemovedEvent`
+**Thread:** process provider thread  
+**Parameter:** `PPH_PROCESS_ITEM`
+
+Fired when a process exits.
+
+---
+
+### `GeneralCallbackProcessProviderUpdatedEvent`
+**Thread:** process provider thread  
+**Parameter:** `PPH_PROCESS_PROVIDER_UPDATED_EVENT`
+
+```c
+typedef struct _PH_PROCESS_PROVIDER_UPDATED_EVENT
+{
+    ULONG RunCount;
+} PH_PROCESS_PROVIDER_UPDATED_EVENT, *PPH_PROCESS_PROVIDER_UPDATED_EVENT;
+```
+
+Fired at the end of each provider cycle after individual add/modify/remove events have been dispatched.
+
+</Accordion>
+
+<Accordion title="Service provider events">
+
+### `GeneralCallbackServiceProviderAddedEvent`
+**Thread:** service provider thread  
+**Parameter:** `PPH_SERVICE_ITEM`
+
+### `GeneralCallbackServiceProviderModifiedEvent`
+**Thread:** service provider thread  
+**Parameter:** `PPH_SERVICE_ITEM`
+
+### `GeneralCallbackServiceProviderRemovedEvent`
+**Thread:** service provider thread  
+**Parameter:** `PPH_SERVICE_ITEM`
+
+### `GeneralCallbackServiceProviderUpdatedEvent`
+**Thread:** service provider thread
+
+</Accordion>
+
+<Accordion title="Network provider events">
+
+### `GeneralCallbackNetworkProviderAddedEvent`
+**Thread:** network provider thread  
+**Parameter:** `PPH_NETWORK_ITEM`
+
+### `GeneralCallbackNetworkProviderModifiedEvent`
+**Thread:** network provider thread  
+**Parameter:** `PPH_NETWORK_ITEM`
+
+### `GeneralCallbackNetworkProviderRemovedEvent`
+**Thread:** network provider thread  
+**Parameter:** `PPH_NETWORK_ITEM`
+
+### `GeneralCallbackNetworkProviderUpdatedEvent`
+**Thread:** network provider thread
+
+</Accordion>
+
+<Accordion title="Process highlighting and tooltips">
+
+### `GeneralCallbackGetProcessHighlightingColor` — `2`
+**Thread:** main thread  
+**Parameter:** `PPH_PLUGIN_GET_HIGHLIGHTING_COLOR`
+
+```c
+typedef struct _PH_PLUGIN_GET_HIGHLIGHTING_COLOR
+{
+    PVOID Parameter;        // PPH_PROCESS_ITEM
+    COLORREF BackColor;
+    COLORREF ForeColor;
+    BOOLEAN Handled;
+    BOOLEAN Cache;
+} PH_PLUGIN_GET_HIGHLIGHTING_COLOR, *PPH_PLUGIN_GET_HIGHLIGHTING_COLOR;
+```
+
+Set `BackColor`/`ForeColor` and `Handled = TRUE` to override the row colour for a process. Set `Cache = TRUE` to allow the host to cache the result.
+
+---
+
+### `GeneralCallbackGetProcessTooltipText` — `3`
+**Thread:** main thread  
+**Parameter:** `PPH_PLUGIN_GET_TOOLTIP_TEXT`
+
+```c
+typedef struct _PH_PLUGIN_GET_TOOLTIP_TEXT
+{
+    PVOID Parameter;                // PPH_PROCESS_ITEM
+    PPH_STRING_BUILDER StringBuilder;
+    ULONG ValidForMs;
+} PH_PLUGIN_GET_TOOLTIP_TEXT, *PPH_PLUGIN_GET_TOOLTIP_TEXT;
+```
+
+Append text to `StringBuilder` to add extra lines to the process tooltip. Set `ValidForMs` to control cache lifetime.
+
+---
+
+### `GeneralCallbackDangerousProcess` — `86`
+**Thread:** varies  
+**Parameter:** `PPH_PLUGIN_IS_DANGEROUS_PROCESS`
+
+```c
+typedef struct _PH_PLUGIN_IS_DANGEROUS_PROCESS
+{
+    HANDLE ProcessId;
+    BOOLEAN DangerousProcess;
+} PH_PLUGIN_IS_DANGEROUS_PROCESS, *PPH_PLUGIN_IS_DANGEROUS_PROCESS;
+```
+
+Set `DangerousProcess = TRUE` to mark a process as dangerous (displayed in red by default).
+
+</Accordion>
+
+<Accordion title="Menu initializing callbacks">
+
+All menu callbacks pass `PPH_PLUGIN_MENU_INFORMATION`:
+
+```c
+typedef struct _PH_PLUGIN_MENU_INFORMATION
+{
+    PPH_EMENU Menu;
+    HWND OwnerWindow;
+    union
+    {
+        struct { ULONG SubMenuIndex; } MainMenu;
+        struct { PPH_PROCESS_ITEM *Processes; ULONG NumberOfProcesses; } Process;
+        struct { PPH_SERVICE_ITEM *Services; ULONG NumberOfServices; } Service;
+        struct { PPH_NETWORK_ITEM *NetworkItems; ULONG NumberOfNetworkItems; } Network;
+        struct { HANDLE ProcessId; PPH_THREAD_ITEM *Threads; ULONG NumberOfThreads; } Thread;
+        struct { HANDLE ProcessId; PPH_MODULE_ITEM *Modules; ULONG NumberOfModules; } Module;
+        struct { HANDLE ProcessId; PPH_MEMORY_NODE *MemoryNodes; ULONG NumberOfMemoryNodes; } Memory;
+        struct { HANDLE ProcessId; PPH_HANDLE_ITEM *Handles; ULONG NumberOfHandles; } Handle;
+        struct { PPH_STRINGREF SectionName; PPH_PROCESS_GROUP ProcessGroup; } MiListSection;
+    } u;
+    ULONG Flags;
+    PPH_LIST PluginHookList;
+} PH_PLUGIN_MENU_INFORMATION, *PPH_PLUGIN_MENU_INFORMATION;
+```
+
+Use `PhPluginCreateEMenuItem` to create items and `PhInsertEMenuItem` to attach them to the menu. The `PluginCallbackMenuItem` plugin callback fires when the user selects one of your items.
+
+---
+
+### `GeneralCallbackMainMenuInitializing` — `5`
+**Thread:** main thread
+
+Called when the main menu bar is being built. Check `menuInfo->u.MainMenu.SubMenuIndex` against the `PH_MENU_ITEM_LOCATION_*` constants:
+
+```c
+#define PH_MENU_ITEM_LOCATION_SYSTEM 0
+#define PH_MENU_ITEM_LOCATION_VIEW   1
+#define PH_MENU_ITEM_LOCATION_TOOLS  2
+#define PH_MENU_ITEM_LOCATION_USERS  3
+#define PH_MENU_ITEM_LOCATION_HELP   4
+```
+
+---
+
+### `GeneralCallbackProcessMenuInitializing` — `9`
+**Thread:** main thread  
+Use `menuInfo->u.Process` for the selected process items.
+
+---
+
+### `GeneralCallbackServiceMenuInitializing` — `10`
+**Thread:** main thread  
+Use `menuInfo->u.Service` for the selected service items.
+
+---
+
+### `GeneralCallbackNetworkMenuInitializing` — `11`
+**Thread:** main thread  
+Use `menuInfo->u.Network` for the selected network items.
+
+---
+
+### `GeneralCallbackIconMenuInitializing` — `12`
+**Thread:** main thread  
+Called when the notification-area icon context menu is being built.
+
+---
+
+### `GeneralCallbackThreadMenuInitializing` — `13`
+**Thread:** properties thread  
+Use `menuInfo->u.Thread`.
+
+---
+
+### `GeneralCallbackModuleMenuInitializing` — `14`
+**Thread:** properties thread  
+Use `menuInfo->u.Module`.
+
+---
+
+### `GeneralCallbackMemoryMenuInitializing` — `15`
+**Thread:** properties thread  
+Use `menuInfo->u.Memory`.
+
+---
+
+### `GeneralCallbackHandleMenuInitializing` — `16`
+**Thread:** properties thread  
+Use `menuInfo->u.Handle`.
+
+---
+
+### `GeneralCallbackMiListSectionMenuInitializing` — `33`
+**Thread:** main thread  
+Use `menuInfo->u.MiListSection` for mini-info list section menus.
+
+</Accordion>
+
+<Accordion title="Properties initializing callbacks">
+
+### `GeneralCallbackProcessPropertiesInitializing` — `4`
+**Thread:** properties thread  
+**Parameter:** `PPH_PLUGIN_PROCESS_PROPCONTEXT`
+
+```c
+typedef struct _PH_PLUGIN_PROCESS_PROPCONTEXT
+{
+    PPH_PROCESS_PROPCONTEXT PropContext;
+    PPH_PROCESS_ITEM ProcessItem;
+} PH_PLUGIN_PROCESS_PROPCONTEXT, *PPH_PLUGIN_PROCESS_PROPCONTEXT;
+```
+
+Add a `HPROPSHEETPAGE` to `PropContext` to insert a tab into the process properties dialog. DotNetTools uses this to add the Assemblies and Performance Counters tabs.
+
+---
+
+### `GeneralCallbackServicePropertiesInitializing` — `7`
+**Thread:** properties thread  
+**Parameter:** `PPH_PLUGIN_OBJECT_PROPERTIES` where `Parameter` is `PPH_SERVICE_ITEM`
+
+---
+
+### `GeneralCallbackHandlePropertiesInitializing` — `8`
+**Thread:** properties thread  
+**Parameter:** `PPH_PLUGIN_OBJECT_PROPERTIES` where `Parameter` is `PPH_PLUGIN_HANDLE_PROPERTIES_CONTEXT`
+
+---
+
+### `GeneralCallbackHandlePropertiesWindowInitialized` — `35`
+**Thread:** properties thread  
+**Parameter:** `PPH_PLUGIN_HANDLE_PROPERTIES_WINDOW_CONTEXT`
+
+---
+
+### `GeneralCallbackHandlePropertiesWindowUninitializing` — `36`
+**Thread:** properties thread  
+**Parameter:** `PPH_PLUGIN_HANDLE_PROPERTIES_WINDOW_CONTEXT`
+
+</Accordion>
+
+<Accordion title="Tree new (column) callbacks">
+
+### `GeneralCallbackProcessTreeNewInitializing` — `17`
+### `GeneralCallbackServiceTreeNewInitializing` — `18`
+### `GeneralCallbackNetworkTreeNewInitializing` — `19`
+**Thread:** main thread  
+**Parameter:** `PPH_PLUGIN_TREENEW_INFORMATION`
+
+```c
+typedef struct _PH_PLUGIN_TREENEW_INFORMATION
+{
+    HWND TreeNewHandle;
+    PVOID CmData;
+    PVOID SystemContext; // e.g. PPH_THREADS_CONTEXT
+} PH_PLUGIN_TREENEW_INFORMATION, *PPH_PLUGIN_TREENEW_INFORMATION;
+```
+
+Call `PhPluginAddTreeNewColumn` here to register extra columns. Store `TreeNewHandle` to identify which tree generated subsequent `PluginCallbackTreeNewMessage` events.
+
+---
+
+### `GeneralCallbackModuleTreeNewInitializing` — `20` / `GeneralCallbackModuleTreeNewUninitializing` — `21`
+**Thread:** properties thread
+
+### `GeneralCallbackThreadTreeNewInitializing` — `22` / `GeneralCallbackThreadTreeNewUninitializing` — `23`
+**Thread:** properties thread
+
+### `GeneralCallbackHandleTreeNewInitializing` — `24` / `GeneralCallbackHandleTreeNewUninitializing` — `25`
+**Thread:** properties thread
+
+### `GeneralCallbackMemoryTreeNewInitializing` — `29` / `GeneralCallbackMemoryTreeNewUninitializing` — `30`
+**Thread:** properties thread
+
+</Accordion>
+
+<Accordion title="System Information and mini-info callbacks">
+
+### `GeneralCallbackSystemInformationInitializing` — `27`
+**Thread:** system information thread  
+**Parameter:** `PPH_PLUGIN_SYSINFO_POINTERS`
+
+```c
+typedef struct _PH_PLUGIN_SYSINFO_POINTERS
+{
+    HWND WindowHandle;
+    PPH_SYSINFO_CREATE_SECTION CreateSection;
+    PPH_SYSINFO_FIND_SECTION FindSection;
+    PPH_SYSINFO_ENTER_SECTION_VIEW EnterSectionView;
+    PPH_SYSINFO_RESTORE_SUMMARY_VIEW RestoreSummaryView;
+} PH_PLUGIN_SYSINFO_POINTERS, *PPH_PLUGIN_SYSINFO_POINTERS;
+```
+
+Call `CreateSection` with a filled-in `PPH_SYSINFO_SECTION` template to add a new panel to the System Information window. ExtendedTools creates sections for GPU, NPU, and ETW here.
+
+---
+
+### `GeneralCallbackMiniInformationInitializing` — `32`
+**Thread:** main thread  
+**Parameter:** `PPH_PLUGIN_MINIINFO_POINTERS`
+
+```c
+typedef struct _PH_PLUGIN_MINIINFO_POINTERS
+{
+    HWND WindowHandle;
+    PPH_MINIINFO_CREATE_SECTION CreateSection;
+    PPH_MINIINFO_FIND_SECTION FindSection;
+    PPH_MINIINFO_CREATE_LIST_SECTION CreateListSection;
+} PH_PLUGIN_MINIINFO_POINTERS, *PPH_PLUGIN_MINIINFO_POINTERS;
+```
+
+</Accordion>
+
+<Accordion title="Tray icon callbacks">
+
+### `GeneralCallbackTrayIconsInitializing` — `80`
+**Thread:** work-queue thread  
+**Parameter:** `PPH_TRAY_ICON_POINTERS`
+
+```c
+typedef struct _PH_TRAY_ICON_POINTERS
+{
+    PPH_REGISTER_TRAY_ICON RegisterTrayIcon;
+} PH_TRAY_ICON_POINTERS, *PPH_TRAY_ICON_POINTERS;
+```
+
+Call `RegisterTrayIcon` to add a notification-area icon. ExtendedTools uses this to register GPU and disk tray icons.
+
+---
+
+### `GeneralCallbackTrayIconsUpdatedEvent` — `81`
+Updated periodically by the tray subsystem.
+
+</Accordion>
+
+<Accordion title="Miscellaneous callbacks">
+
+### `GeneralCallbackNotifyEvent` — `6`
+**Thread:** main thread  
+**Parameter:** `PPH_PLUGIN_NOTIFY_EVENT`
+
+```c
+typedef struct _PH_PLUGIN_NOTIFY_EVENT
+{
+    ULONG Type;         // PH_NOTIFY_PROCESS_*, PH_NOTIFY_SERVICE_*, PH_NOTIFY_DEVICE_*
+    BOOLEAN Handled;
+    PVOID Parameter;    // PPH_PROCESS_ITEM, PPH_SERVICE_ITEM, or PPH_DEVICE_ITEM
+} PH_PLUGIN_NOTIFY_EVENT, *PPH_PLUGIN_NOTIFY_EVENT;
+```
+
+---
+
+### `GeneralCallbackThreadStackControl` — `26`
+**Thread:** properties thread  
+**Parameter:** `PPH_PLUGIN_THREAD_STACK_CONTROL`
+
+Allows plugins to intercept thread stack walking and symbol resolution. DotNetTools uses this to resolve managed frame symbols.
+
+---
+
+### `GeneralCallbackMemoryItemListControl` — `31`
+**Thread:** properties thread  
+**Parameter:** `PPH_PLUGIN_MEMORY_ITEM_LIST_CONTROL`
+
+---
+
+### `GeneralCallbackLoggedEvent` — `76`
+**Thread:** multiple provider threads
+
+---
+
+### `GeneralCallbackDeviceNotificationEvent` — `78`
+**Thread:** device provider thread
+
+---
+
+### `GeneralCallbackWindowNotifyEvent` — `83`
+### `GeneralCallbackProcessStatsNotifyEvent` — `84`
+### `GeneralCallbackUpdateAutomatically` — `87`
+
+</Accordion>
+
+---
+
+## Plugin lifecycle callbacks
+
+These are registered with `PhGetPluginCallback(PluginInstance, ...)` and are delivered only to your plugin.
+
+<Accordion title="Plugin lifecycle callbacks">
+
+### `PluginCallbackLoad` — `0`
+**Thread:** main thread  
+**Parameter:** `PPH_LIST` of startup parameters (may be `NULL`)
+
+Called after the host has finished loading all plugins. Read your settings and perform any initialisation that does not require the main window here.
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI LoadCallback(
+    _In_opt_ PVOID Parameter,
+    _In_opt_ PVOID Context
+    )
+{
+    GeoLiteDatabaseType = PhGetIntegerSetting(SETTING_NAME_GEOLITE_DB_TYPE);
+    NetworkExtensionEnabled = !!PhGetIntegerSetting(SETTING_NAME_EXTENDED_TCP_STATS);
+}
+```
+
+*(Source: `plugins/NetworkTools/main.c`)*
+
+---
+
+### `PluginCallbackUnload` — `1`
+**Thread:** main thread  
+**Parameter:** `BOOLEAN SessionEnding` (cast from `PVOID` via `PtrToUlong`)
+
+Called just before the plugin is unloaded. If `SessionEnding` is `TRUE`, Windows is shutting down or the user is logging off; skip expensive teardown in that case.
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI UnloadCallback(
+    _In_ PVOID Parameter,
+    _In_ PVOID Context
+    )
+{
+    BOOLEAN SessionEnding = (BOOLEAN)PtrToUlong(Parameter);
+
+    if (SessionEnding)
+        return;
+
+    EtEtwStatisticsUninitialization();
+    EtFramesMonitorUninitialization();
+}
+```
+
+*(Source: `plugins/ExtendedTools/main.c`)*
+
+---
+
+### `PluginCallbackShowOptions` — `2`
+**Thread:** main thread  
+**Parameter:** `HWND ParentWindowHandle`
+
+<Note>
+  As of recent builds the Options window uses `GeneralCallbackOptionsWindowInitializing` instead. `PluginCallbackShowOptions` is kept for compatibility; prefer the general callback for new plugins.
+</Note>
+
+---
+
+### `PluginCallbackMenuItem` — `3`
+**Thread:** main thread or properties thread  
+**Parameter:** `PPH_PLUGIN_MENU_ITEM`
+
+```c
+typedef struct _PH_PLUGIN_MENU_ITEM
+{
+    PPH_PLUGIN Plugin;
+    ULONG Id;           // the Id you passed to PhPluginCreateEMenuItem
+    ULONG Reserved1;
+    PVOID Context;      // the Context you passed to PhPluginCreateEMenuItem
+    HWND OwnerWindow;   // valid only when the item is chosen
+    PVOID Reserved2;
+    PVOID Reserved3;
+    PPH_PLUGIN_MENU_ITEM_DELETE_FUNCTION DeleteFunction;
+} PH_PLUGIN_MENU_ITEM, *PPH_PLUGIN_MENU_ITEM;
+```
+
+Dispatch on `menuItem->Id` to determine which item was chosen:
+
+```c
+_Function_class_(PH_CALLBACK_FUNCTION)
+VOID NTAPI MenuItemCallback(
+    _In_ PVOID Parameter,
+    _In_opt_ PVOID Context
+    )
+{
+    PPH_PLUGIN_MENU_ITEM menuItem = (PPH_PLUGIN_MENU_ITEM)Parameter;
+
+    switch (menuItem->Id)
+    {
+    case NETWORK_ACTION_PING:
+        ShowPingWindow(menuItem->OwnerWindow, (PPH_NETWORK_ITEM)menuItem->Context);
+        break;
+    case NETWORK_ACTION_TRACEROUTE:
+        ShowTracertWindow(menuItem->OwnerWindow, (PPH_NETWORK_ITEM)menuItem->Context);
+        break;
+    case NETWORK_ACTION_WHOIS:
+        ShowWhoisWindow(menuItem->OwnerWindow, (PPH_NETWORK_ITEM)menuItem->Context);
+        break;
+    }
+}
+```
+
+*(Source: `plugins/NetworkTools/main.c`)*
+
+---
+
+### `PluginCallbackTreeNewMessage` — `4`
+**Thread:** main thread or properties thread  
+**Parameter:** `PPH_PLUGIN_TREENEW_MESSAGE`
+
+```c
+typedef struct _PH_PLUGIN_TREENEW_MESSAGE
+{
+    HWND TreeNewHandle;
+    PH_TREENEW_MESSAGE Message;   // e.g. TreeNewGetCellText, TreeNewCustomDraw
+    PVOID Parameter1;
+    PVOID Parameter2;
+    ULONG SubId;                  // column SubId from PhPluginAddTreeNewColumn
+    PVOID Context;
+} PH_PLUGIN_TREENEW_MESSAGE, *PPH_PLUGIN_TREENEW_MESSAGE;
+```
+
+Use `message->TreeNewHandle` to distinguish which tree sent the message when your plugin owns columns in multiple trees, and `message->SubId` to identify the column. See [Plugin examples](/dev/plugin-examples) for a complete `TreeNewGetCellText` implementation.
+
+---
+
+### `PluginCallbackPhSvcRequest` — `5`
+**Thread:** phsvc thread  
+**Parameter:** `PPH_PLUGIN_PHSVC_REQUEST`
+
+Allows elevated out-of-process requests. ExtendedTools and DotNetTools use this for operations that require elevation.
+
+---
+
+### `PluginCallbackMenuHook` — `6`
+**Thread:** menu thread  
+**Parameter:** `PH_PLUGIN_MENU_HOOK_INFORMATION`
+
+```c
+typedef struct _PH_PLUGIN_MENU_HOOK_INFORMATION
+{
+    PPH_PLUGIN_MENU_INFORMATION MenuInfo;
+    PPH_EMENU SelectedItem;
+    PVOID Context;
+    BOOLEAN Handled;
+} PH_PLUGIN_MENU_HOOK_INFORMATION, *PPH_PLUGIN_MENU_HOOK_INFORMATION;
+```
+
+Register a menu hook with `PhPluginAddMenuHook`. Set `Handled = TRUE` to prevent the default menu item handler from running.
+
+</Accordion>

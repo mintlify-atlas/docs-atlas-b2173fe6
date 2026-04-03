@@ -1,0 +1,170 @@
+---
+title: "Settings"
+description: "Configure System Informer's behavior, appearance, and storage through the Options dialog."
+---
+
+System Informer stores all of its preferences in a single settings file and exposes them through a categorized **Options** dialog. You can open it from the **Options** menu in the main window. The dialog is divided into sections — **General**, **Advanced**, **Highlighting**, **Graphs**, and **Plugins** — selectable from the tree on the left.
+
+<Note>
+  Some settings require a restart to take effect. When you change one of those settings and click **OK**, System Informer will offer to restart automatically.
+</Note>
+
+## Settings file
+
+By default, settings are stored as a JSON file in the roaming AppData folder (`%APPDATA%\SystemInformer\settings.json`). When System Informer detects a file named `SystemInformer.exe.settings.json` in the same directory as the executable, it switches to **portable mode** and reads/writes settings from that file instead.
+
+<Steps>
+  <Step title="Enable portable mode">
+    Create an empty file named `SystemInformer.exe.settings.json` in the same folder as `SystemInformer.exe`. On the next launch, all settings will be saved to that file instead of the AppData location.
+  </Step>
+  <Step title="Reset all settings">
+    In the Options dialog, click **Reset** at the bottom left. System Informer will ask for confirmation, reset every setting to its default value, write the defaults to the settings file, and restart.
+  </Step>
+  <Step title="Clean up unused settings">
+    Click **Cleanup** to remove settings that are no longer referenced by the current version or any installed plugin. This keeps the settings file tidy without affecting active configuration.
+  </Step>
+</Steps>
+
+<Tip>
+  You can carry a portable installation on a USB drive by placing `SystemInformer.exe` and a blank `SystemInformer.exe.settings.json` in the same folder. All preferences travel with the executable.
+</Tip>
+
+## General settings
+
+The **General** section controls the update interval, startup behavior, fonts, and other everyday preferences.
+
+<Accordion title="Update interval and display">
+  - **Update interval** — How often (in milliseconds) System Informer refreshes process, service, and network data. Lower values give more responsive readings but use more CPU.
+  - **Maximum size unit** — The largest byte unit used when formatting file/memory sizes (KB, MB, GB, etc.).
+  - **Search engine** — The URL template used when you right-click a process and choose to search online. The `%s` placeholder is replaced with the process name.
+  - **Show CPU below 0.01%** — Controls whether processes using a tiny fraction of the CPU are displayed with a non-zero value rather than `0%`.
+</Accordion>
+
+<Accordion title="Startup and window behavior">
+  - **Allow only one instance** — Prevents a second copy of System Informer from running. Activates the existing window instead.
+  - **Hide when closed** — Minimizes to the notification area instead of exiting when you close the main window.
+  - **Hide when minimized** — Collapses to the notification area when you minimize the main window.
+  - **Start when I log on** — Adds System Informer to `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` so it launches automatically at logon.
+  - **Start hidden** — Combines with the logon option; starts System Informer minimized to the tray.
+  - **Remember last selected window** — Restores the previously active tab (Processes, Services, Network, etc.) on the next launch.
+  - **Icon click toggles visibility** — Clicking the tray icon shows or hides the main window rather than opening a menu.
+  - **Single-click tray icons** — A single click on a tray icon activates it rather than requiring a double-click.
+</Accordion>
+
+<Accordion title="Fonts">
+  System Informer uses two fonts:
+
+  - **Default font** — Used in most list views and dialogs. Click **Select** to open the Windows font picker.
+  - **Monospace font** — Used in hex editors, memory views, and other fixed-width contexts.
+
+  Both selections are stored as hex-encoded `LOGFONT` structures in the settings file (`Font` and `FontMonospace`).
+</Accordion>
+
+## Highlighting
+
+The **Highlighting** section lets you assign colors to different process and thread states so you can spot important entries at a glance.
+
+<CardGroup cols={2}>
+  <Card title="Process states">
+    Colors for new, removed, own, system, service, job, WOW64, debugged, elevated, immersive, Pico, suspended, .NET, packed, low-coherency, partially-suspended, and efficiency-mode processes.
+  </Card>
+  <Card title="Thread and handle states">
+    Colors for GUI threads, relocated modules, protected handles, protected-inherit handles, protected processes, and inherit handles.
+  </Card>
+  <Card title="Service states">
+    Colors for disabled and stopped services in the Services list.
+  </Card>
+  <Card title="Highlighting duration">
+    How long (in milliseconds) newly created or deleted items stay highlighted before returning to their normal color. Set to `0` to disable time-limited highlighting.
+  </Card>
+</CardGroup>
+
+Each color entry has an **enabled** checkbox. Uncheck it to use the default background for that process type.
+
+## Graphs
+
+The **Graphs** section controls how the mini-graphs in the main window and the System Information window are drawn.
+
+<Accordion title="Graph color mode">
+  Choose between **Default** (light) and **Dark** color palettes for all graph backgrounds and lines. Enabling **theme support** in the Advanced section automatically switches to the dark palette.
+</Accordion>
+
+<Accordion title="Graph line colors">
+  Individual colors are configurable for:
+
+  - CPU kernel and user time
+  - I/O read/other and write
+  - Private bytes (commit charge)
+  - Physical memory
+  - Power usage, temperature, and fan RPM (requires compatible hardware/plugin)
+</Accordion>
+
+<Accordion title="Other graph settings">
+  - **Show text on graphs** — Overlays a percentage or value label on each mini-graph.
+  - **Fixed graph scaling** — Pins the graph's Y-axis to a fixed maximum instead of auto-scaling to the current peak. Requires a restart.
+</Accordion>
+
+## Plugins
+
+The **Plugins** section lists every plugin that System Informer found in its plugins directory and lets you enable or disable each one.
+
+<Steps>
+  <Step title="Enable or disable a plugin">
+    Find the plugin in the list. The enabled/disabled state is saved to the `DisabledPlugins` setting. Changes take effect on the next restart.
+  </Step>
+  <Step title="View plugin details">
+    Select a plugin and click **Properties** (or double-click) to see its internal name, version, author, and description.
+  </Step>
+  <Step title="Uninstall a plugin">
+    Right-click the plugin and choose **Uninstall**. This removes the plugin file from disk.
+  </Step>
+</Steps>
+
+<Note>
+  Plugins are loaded from a `plugins\` subfolder next to `SystemInformer.exe`. Third-party plugins placed there are loaded automatically when **Enable plugins** is checked in the General settings.
+</Note>
+
+## Advanced settings
+
+The Advanced section (visible when **Show advanced options** is checked) exposes lower-level toggles. Most of these require a restart.
+
+<Tabs>
+  <Tab title="Performance">
+    | Setting | Default | Description |
+    |---|---|---|
+    | Sample count | Automatic | Number of data points kept for graph history. Automatic sizes based on window width. |
+    | Enable cycle-based CPU usage | On | Uses CPU cycle counts instead of clock time for more accurate per-process CPU percentages. Requires restart. |
+    | Enable AVX extensions | Off | Uses AVX instructions for graph drawing if your CPU supports them. Experimental. |
+    | Enable low-latency mode | Off | Uses a higher-resolution timer for the update interval, reducing jitter. Experimental. |
+    | Include usage of collapsed processes | Off | Adds child-process CPU and memory usage to collapsed parent rows in the tree. |
+  </Tab>
+  <Tab title="Security and integrity">
+    | Setting | Default | Description |
+    |---|---|---|
+    | Enable kernel-mode driver | On | Loads the `KSystemInformer` driver for elevated privilege inspection. Requires administrator and restart. |
+    | Check images for digital signatures | On | Verifies the Authenticode signature of every process image (stage 2 scan). |
+    | Check services for digital signatures | Off | Extends signature verification to service binaries. |
+    | Check images for coherency | Off | Detects processes whose in-memory image differs from the on-disk executable (potential injection). |
+    | Enable undecorated symbols | On | Strips C++ name mangling from symbol names shown in thread stacks and call graphs. |
+  </Tab>
+  <Tab title="Network">
+    | Setting | Default | Description |
+    |---|---|---|
+    | Resolve network addresses | On | Performs reverse-DNS lookups for remote addresses in the Network tab. Requires restart. |
+    | Resolve DNS over HTTPS (DoH) | Off | Routes DNS resolution through HTTPS instead of the system resolver. Requires restart. |
+  </Tab>
+  <Tab title="Appearance">
+    | Setting | Default | Description |
+    |---|---|---|
+    | Enable theme support | Off | Applies a dark visual theme to all windows. Experimental; requires restart. |
+    | Enable monospace fonts | Off | Uses the configured monospace font in list views that support it. |
+    | Enable tray information window | Off | Shows a compact floating window with live stats when hovering a tray icon. Requires restart. |
+    | Enable streamer mode | Off | Disables window capture (prevents screen-recording tools from capturing System Informer). Experimental. |
+    | Show tooltips instantly | Off | Removes the hover delay before tooltips appear. |
+    | Enable column header totals | Off | Displays aggregate totals in column headers. Experimental; requires restart. |
+  </Tab>
+</Tabs>
+
+<Warning>
+  Changing **Enable kernel-mode driver** while running without administrator rights does not immediately take effect. You must restart System Informer with elevation for the driver to load.
+</Warning>

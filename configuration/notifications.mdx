@@ -1,0 +1,175 @@
+---
+title: "Notifications"
+description: "Configure tray icon alerts, balloon tips, toast notifications, and the event log for process, service, and device changes."
+---
+
+System Informer can alert you when processes start or stop, services are created or deleted, and devices appear or disappear — all without you having to watch the main window. Alerts are delivered through the Windows notification area (tray icons with balloon tips or toast notifications) and are also recorded in an in-memory log you can review at any time.
+
+## Tray icons
+
+The notification area hosts up to ten built-in tray icons, each showing a different live metric. You can enable any combination of them from the **Options** menu.
+
+<CardGroup cols={2}>
+  <Card title="CPU usage">
+    Numeric percentage of total CPU utilization, updated on each refresh cycle.
+  </Card>
+  <Card title="CPU history">
+    Mini graph showing kernel (red) and user (green) CPU time over the history window.
+  </Card>
+  <Card title="I/O history">
+    Mini graph showing read/other (blue) and write (orange) disk and network I/O rates.
+  </Card>
+  <Card title="Commit charge history">
+    Mini graph of the system's commit charge (private bytes) as a fraction of the commit limit.
+  </Card>
+  <Card title="Physical memory history">
+    Mini graph of physical RAM in use.
+  </Card>
+  <Card title="CPU usage (text)">
+    Numeric CPU percentage rendered as text directly inside the icon.
+  </Card>
+  <Card title="I/O usage (text)">
+    Current I/O rate rendered as text inside the icon.
+  </Card>
+  <Card title="Commit usage (text)">
+    Current commit charge rendered as text inside the icon.
+  </Card>
+  <Card title="Physical usage (text)">
+    Current physical memory usage rendered as text inside the icon.
+  </Card>
+  <Card title="System Informer icon (static)">
+    A plain application icon. Useful when you want a single-click shortcut in the tray without a dynamic graph.
+  </Card>
+</CardGroup>
+
+### Enabling and configuring tray icons
+
+<Steps>
+  <Step title="Open tray icon settings">
+    Go to **Options** → **Tray icons**. Each icon has a checkbox. Enable the ones you want.
+  </Step>
+  <Step title="Interact with an icon">
+    - **Left-click** (or double-click, depending on settings): bring the main window to the front.
+    - **Right-click**: open the context menu with quick actions.
+    - **Hover**: show the tray information window (if enabled) with a live breakdown of the metric.
+  </Step>
+  <Step title="Persist icon positions">
+    Enable **Persist tray icon positions** (in Options → Advanced) to assign stable GUIDs to each icon so Windows remembers where you placed them in the notification area across restarts.
+  </Step>
+</Steps>
+
+<Accordion title="Tray icon click behavior">
+  Two settings control what happens when you click a tray icon:
+
+  - **Single-click tray icons** — Triggers the click action on mouse-down instead of mouse-up, so you don't have to wait for a double-click delay.
+  - **Icon click toggles visibility** — Clicking the icon alternately shows and hides the main window rather than always bringing it to the front.
+
+  Both are found in **Options** → **General** → Advanced settings list.
+</Accordion>
+
+## Balloon tips and toast notifications
+
+When a notable event occurs (such as a process starting or a service being deleted), System Informer can display a brief alert. Two delivery mechanisms are available and are chosen automatically at runtime:
+
+<Tabs>
+  <Tab title="Toast notifications (Windows 10+)">
+    System Informer uses the Windows Runtime toast notification API to display rich notifications in the Action Center. Toast notifications appear even when System Informer is minimized and persist in the notification history.
+
+    - Requires at least one tray icon to be enabled.
+    - Controlled by the `ToastNotifyEnabled` setting.
+    - Clicking a toast opens the System Informer log window showing details of the event that triggered it.
+  </Tab>
+  <Tab title="Balloon tips">
+    On older Windows versions, or when toast notifications are unavailable, System Informer falls back to the classic `NIM_MODIFY` balloon tip API. These appear as a temporary callout attached to the first enabled tray icon.
+
+    Two additional options apply to balloon tips:
+    - **Show icon in balloon** — Adds the System Informer icon to the balloon callout.
+    - **Mute balloon sound** — Suppresses the notification sound (`NIIF_NOSOUND`).
+  </Tab>
+</Tabs>
+
+## Notification types
+
+System Informer generates notifications for the following event categories:
+
+<Accordion title="Process events">
+  | Event | Trigger |
+  |---|---|
+  | Process created | A new process appears in the process list |
+  | Process terminated | A process exits; includes the exit status code |
+
+  Each process event records the process name, PID, parent process name and PPID, and timestamp. In the log, the format is:
+
+  ```
+  ProcessName (PID) started by ParentName (PPID)
+  ProcessName (PID); exit status 0xCODE
+  ```
+</Accordion>
+
+<Accordion title="Service events">
+  | Event | Trigger |
+  |---|---|
+  | Service created | A new service is registered in the SCM |
+  | Service deleted | A service is removed from the SCM |
+  | Service started | A service transitions to the Running state |
+  | Service stopped | A service transitions to the Stopped state |
+  | Service continued | A service resumes from the Paused state |
+  | Service paused | A service enters the Paused state |
+
+  Service events record the internal service name and its display name.
+</Accordion>
+
+<Accordion title="Device events">
+  System Informer also logs device arrival and removal events (plug-and-play). Each entry includes the device classification and friendly name.
+</Accordion>
+
+### Controlling which events trigger notifications
+
+The notification mask (`IconNotifyMask` setting) is a bitmask that controls which event categories produce tray icon alerts. You configure it through the tray icon options dialog — checkboxes map directly to bits in the mask.
+
+<Note>
+  The log always records every event regardless of the notification mask. The mask only controls whether a balloon tip or toast is shown for a given category.
+</Note>
+
+## Event log
+
+The log window keeps a circular buffer of events (default 200 entries, configurable via `LogEntries` in settings). To open it, go to **View** → **Log**.
+
+<Steps>
+  <Step title="Open the log">
+    Click **View** → **Log** in the menu bar. The log window lists every recorded event with its timestamp and a formatted description.
+  </Step>
+  <Step title="Review events">
+    Each row shows the event time (in local time) and a text summary. Double-click a process event to open that process's properties (if the process is still running).
+  </Step>
+  <Step title="Clear the log">
+    Click **Clear** in the log window toolbar to discard all current entries. The buffer continues recording new events immediately.
+  </Step>
+</Steps>
+
+<Accordion title="Log buffer size">
+  The `LogEntries` setting controls the circular buffer size. The default is 200, and the maximum allowed value is 4,096. When the buffer fills, the oldest entry is discarded to make room for the newest. You can change this value in `SystemInformer.exe.settings.json` and restart for the new size to take effect.
+</Accordion>
+
+## Plugin-based notifications
+
+The **ExtendedNotifications** plugin (included with System Informer) extends the built-in notification system with additional filtering and logging capabilities.
+
+<CardGroup cols={2}>
+  <Card title="Per-process filtering">
+    Configure rules to suppress or highlight notifications for specific process names or paths, so you only see alerts that matter to you.
+  </Card>
+  <Card title="Logging to file">
+    Write all notification events to a text or XML file on disk for offline analysis or integration with other tools.
+  </Card>
+  <Card title="Growl / network alerts">
+    Some community plugins extend this further by forwarding events over the network to Growl-compatible or syslog receivers.
+  </Card>
+  <Card title="Plugin API">
+    Plugins register with the notification system through the `GeneralCallbackLoggedEvent` callback. They receive a `PH_LOG_ENTRY` structure for every event and can react to it however they choose.
+  </Card>
+</CardGroup>
+
+<Note>
+  The ExtendedNotifications plugin must be enabled in **Options** → **Plugins** for its features to be active. Changes take effect after a restart.
+</Note>

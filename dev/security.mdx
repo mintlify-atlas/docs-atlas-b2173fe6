@@ -1,0 +1,76 @@
+---
+title: "Security policy"
+description: "How to report security vulnerabilities in System Informer and what to expect from the disclosure process."
+---
+
+The System Informer team treats security as a top priority and reviews all vulnerability reports seriously.
+
+<Warning>
+  Do not report security vulnerabilities through the public GitHub issue tracker. Use the private email address below so the issue can be assessed and patched before public disclosure.
+</Warning>
+
+## Reporting a vulnerability
+
+If you discover a security issue in System Informer, send a report by emailing:
+
+- **security@systeminformer.com**
+- **security@systeminformer.io**
+
+Include as much detail as you can — affected versions, reproduction steps, and any proof-of-concept code help the team assess severity and prioritize a fix.
+
+### What to expect
+
+- **Within 48 hours** — the team will acknowledge your email.
+- **Ongoing updates** — after the initial reply, the security team will keep you informed of progress toward a fix and a public announcement.
+- **Additional requests** — the team may ask for more information or guidance as the investigation proceeds.
+
+We appreciate responsible disclosure and are committed to acknowledging your contribution.
+
+## Disclosure process
+
+When the team receives a security bug report, a primary developer is assigned to coordinate the fix and release. The process involves the following steps:
+
+<Steps>
+  <Step title="Confirm and scope">
+    Confirm the problem and determine which versions are affected.
+  </Step>
+
+  <Step title="Audit for related issues">
+    Audit the codebase for any similar problems that may have the same root cause.
+  </Step>
+
+  <Step title="Seek expert review">
+    Seek review from respected third-party security experts as appropriate.
+  </Step>
+
+  <Step title="Prepare and release fixes">
+    Prepare fixes for all releases still under maintenance and release them as quickly as possible.
+  </Step>
+</Steps>
+
+## Third-party modules
+
+If you find a security vulnerability in a third-party module bundled with or used by System Informer, report it directly to the person or team maintaining that module rather than to the System Informer team.
+
+## Kernel driver security model
+
+System Informer includes a kernel driver (`KSystemInformer`) that enforces a security policy on the processes that load it. The driver restricts access from processes that contain unsigned modules — this is intentional behavior, not a vulnerability.
+
+Key points:
+
+- Locally built plugins are not signed with the official key pair and will receive restricted driver access by default.
+- You can set up a development key pair to sign your own builds. See [Kernel driver](/dev/kernel-driver) for instructions.
+- Alternatively, you can disable image load denial in System Informer's advanced settings to allow unsigned modules with reduced (rather than denied) access.
+
+<Note>
+  The driver's signing requirement is a deliberate security boundary. Bypassing it in a production environment weakens the integrity guarantees the driver provides.
+</Note>
+
+<CardGroup cols={2}>
+  <Card title="Contributing" icon="git-pull-request" href="/dev/contributing">
+    How to submit bug reports, feature requests, and pull requests.
+  </Card>
+  <Card title="Kernel driver" icon="microchip" href="/dev/kernel-driver">
+    How the kernel driver works and how to set up a development key pair.
+  </Card>
+</CardGroup>

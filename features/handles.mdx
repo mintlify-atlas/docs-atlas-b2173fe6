@@ -1,0 +1,164 @@
+---
+title: "Handles and objects"
+description: "Browse every open kernel handle in a process, search system-wide for handles to a specific file or object, and close handles that have locks on files."
+---
+
+Every Windows process holds a private table of open kernel handles — references to objects such as files, registry keys, threads, mutexes, events, and semaphores. System Informer lets you enumerate these handles, inspect their attributes, close them, and search across all processes to find which one holds a handle to a particular named object.
+
+## Per-process handle list
+
+The **Handles** tab in the process properties dialog shows all open handles for a single process.
+
+<Steps>
+  <Step title="Open process properties">
+    Double-click a process on the **Processes** tab, or right-click it and choose **Properties**.
+  </Step>
+  <Step title="Go to the Handles tab">
+    Click the **Handles** tab. System Informer queries the kernel for the process's handle table and resolves type names and object names on a background thread.
+  </Step>
+  <Step title="Wait for name resolution">
+    Object names appear as they are resolved. Some names (especially for files on network shares or pipes) may take a moment because name queries can block.
+  </Step>
+</Steps>
+
+## Handle list columns
+
+Default visible columns:
+
+| Column | Description |
+|---|---|
+| **Type** | Kernel object type (e.g., `File`, `Key`, `Thread`, `Mutant`, `Event`) |
+| **Name** | Resolved object name (e.g., `\Device\HarddiskVolume3\Windows\System32\ntdll.dll`) |
+| **Granted access (symbolic)** | Access rights granted to this handle, in symbolic form (e.g., `Full access`, `Read`, `Synchronize`) |
+
+Optional columns:
+
+- **Handle** — Handle value (the numeric index in the handle table, shown in hex)
+- **Object address** — Kernel-mode pointer to the underlying object
+- **Attributes** — Handle flags: `Inherit`, `Protect from close`, and `Audit object close`
+- **Granted access** — Raw access mask in hexadecimal
+- **Original name** — The raw object name before symbolic link resolution
+- **File share access** — For file handles: whether other openers can read (`R`), write (`W`), or delete (`D`)
+- **Handle value** — Redundant with Handle; useful when sorting differs from the index
+- **Handle count** — Total number of handles open to the same underlying object across the whole system
+- **Pointer count** — Total kernel reference count for the object
+
+## Handle types
+
+<CardGroup cols={2}>
+  <Card title="File" icon="file">
+    Open files, directories, pipes, and device objects. The name shows the NT device path (e.g., `\Device\HarddiskVolume3\...`).
+  </Card>
+  <Card title="Key" icon="key">
+    Open registry keys. Names use the NT path (`\REGISTRY\MACHINE\...`) rather than the Win32 `HKEY_` form.
+  </Card>
+  <Card title="Thread" icon="microchip">
+    Open handles to threads, used for reading thread context, injecting code, or synchronizing.
+  </Card>
+  <Card title="Process" icon="list-tree">
+    Open handles to other processes, used for memory reads/writes, injection, or synchronization.
+  </Card>
+  <Card title="Event" icon="bell">
+    Synchronization events (auto-reset and manual-reset). Named events are accessible across processes.
+  </Card>
+  <Card title="Mutant (Mutex)" icon="lock">
+    Mutual exclusion objects. A process that holds a mutex prevents other waiters from acquiring it.
+  </Card>
+  <Card title="Semaphore" icon="circle-half-stroke">
+    Counting semaphore objects used for resource counting.
+  </Card>
+  <Card title="Section" icon="layer-group">
+    Memory-mapped file sections, including shared memory between processes.
+  </Card>
+  <Card title="Token" icon="id-badge">
+    Access tokens representing security contexts.
+  </Card>
+  <Card title="Job" icon="briefcase">
+    Job objects grouping processes with shared limits.
+  </Card>
+  <Card title="Desktop" icon="display">
+    Window station desktops used by GUI threads.
+  </Card>
+  <Card title="ALPC Port" icon="plug">
+    Advanced Local Procedure Call ports used for IPC between Windows subsystems and services.
+  </Card>
+</CardGroup>
+
+## Filtering the handle list
+
+Use the options menu in the Handles tab toolbar to show or hide categories of handles:
+
+| Filter option | Effect |
+|---|---|
+| **Hide unnamed handles** | Hides handles with no resolvable name, reducing noise |
+| **Hide protected handles** | Hides handles with the `Protect from close` attribute |
+| **Hide inherited handles** | Hides handles with the `Inherit` attribute |
+| **Hide ETW handles** | Hides Event Tracing for Windows registration handles |
+| **Highlight protected handles** | Colors handles that are protected from accidental closing |
+| **Highlight inherited handles** | Colors handles that were inherited from a parent process |
+
+## Closing a handle
+
+<Steps>
+  <Step title="Select a handle">
+    Click the handle row you want to close.
+  </Step>
+  <Step title="Right-click and choose Close">
+    Select **Close** from the context menu. System Informer will ask for confirmation.
+  </Step>
+  <Step title="Confirm">
+    Click **Yes**. If the kernel driver (`KSystemInformer`) is loaded, System Informer calls into the driver to close the handle remotely. Without the driver, it uses `DuplicateHandle` with `DUPLICATE_CLOSE_SOURCE`.
+  </Step>
+</Steps>
+
+<Warning>
+  Closing a handle that the target process is still using can crash that process or cause data corruption. The most common safe use case is closing a file handle that is preventing deletion or renaming of a file.
+</Warning>
+
+## Finding which process has a file open
+
+The **Find handles or DLLs** dialog searches across all processes to find handles to a named object.
+
+<Steps>
+  <Step title="Open the search dialog">
+    Press **Ctrl+F** from the main window, or go to **Find → Find handles or DLLs**.
+  </Step>
+  <Step title="Enter a search term">
+    Type a partial file path or object name. For example, type `pagefile` to find handles to the page file, or `\BaseNamedObjects\MyMutex` to find a named mutex.
+  </Step>
+  <Step title="Select the type filter">
+    Use the **Type** dropdown to restrict the search to a specific object type (e.g., `File`, `Key`, `Mutant`). Leave it blank to search all types.
+  </Step>
+  <Step title="Run the search">
+    Click **Find**. System Informer enumerates all handles in all accessible processes and reports matches. The results list shows the process, object type, handle value, object address, and resolved name.
+  </Step>
+  <Step title="Act on the result">
+    Right-click a result row to close the handle, go to the owning process, or copy the information.
+  </Step>
+</Steps>
+
+<Tip>
+  The search also covers loaded DLLs and memory-mapped files (not just handles). This lets you find which process has a DLL mapped, even if there is no explicit open file handle.
+</Tip>
+
+The search covers three result types simultaneously:
+
+| Result type | What it finds |
+|---|---|
+| `Handle` | An explicit open handle in a process's handle table |
+| `Module` | A DLL or mapped image loaded into a process |
+| `Mapped file` | A memory-mapped file section (not necessarily a handle) |
+
+## Named objects browser
+
+<Note>
+  System Informer also exposes the global named object namespace via the **Object Manager** plugin. This plugin browses the NT object namespace tree — including `\BaseNamedObjects`, `\Device`, `\Driver`, `\KnownDlls`, and others — independently of which process holds a handle.
+</Note>
+
+## Handle statistics
+
+Click **Handle statistics** in the toolbar of the Handles tab to open a summary showing:
+
+- Total number of open handles in the process
+- Breakdown by object type (how many File handles, how many Key handles, etc.)
+- Handles with the `Protect from close` attribute (a common anti-tampering technique)

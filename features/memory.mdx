@@ -1,0 +1,168 @@
+---
+title: "Memory analysis"
+description: "Explore a process's virtual address space, search for strings or byte patterns, edit memory live, and inspect heap allocations."
+---
+
+System Informer provides a detailed view of every virtual memory region allocated in a process's address space. You can inspect region types and protection flags, read and write arbitrary bytes, search for patterns, and manage region lifecycle — all without attaching a debugger.
+
+## Opening the memory map
+
+The memory view is on the **Memory** tab of the process properties dialog.
+
+<Steps>
+  <Step title="Open process properties">
+    Double-click a process on the **Processes** tab, or right-click it and choose **Properties**.
+  </Step>
+  <Step title="Go to the Memory tab">
+    Click the **Memory** tab in the properties dialog. System Informer enumerates the process's virtual address space on a background thread and populates the list.
+  </Step>
+  <Step title="Expand allocation bases">
+    The list is grouped by allocation base. Click the arrow next to an allocation base row to expand it and see the individual sub-regions within that allocation.
+  </Step>
+</Steps>
+
+## Memory region columns
+
+| Column | Description |
+|---|---|
+| **Base address** | Starting virtual address of the region |
+| **Type** | `Private`, `Mapped`, or `Image` |
+| **Size** | Size of the region in bytes |
+| **Protection** | Current page protection flags (e.g., `RW`, `RX`, `RWX`) |
+| **Use** | Inferred purpose: heap, stack, PEB, mapped file name, module name, etc. |
+| **Total WS** | Total working set pages (pages currently in physical memory) |
+| **Private WS** | Working set pages that are private (not shared with any other process) |
+| **Shareable WS** | Working set pages that could be shared |
+| **Shared WS** | Working set pages that are actually shared with at least one other process |
+| **Locked WS** | Working set pages that are locked in memory |
+
+Optional columns:
+
+- **Committed** — Whether the region is committed (backed by page file or physical memory)
+- **Private** — Number of private pages
+- **Signing level** — Code signing level for image-backed regions
+- **Original protection** — The protection set when the region was first allocated (before any `VirtualProtect` calls)
+- **Original pages** — Original page count before any sub-region splits
+- **Region type** — Detailed region type from the kernel
+- **Priority** — Memory priority (page file eviction hint)
+
+## Region types
+
+| Type | Description |
+|---|---|
+| `Private` | Memory allocated by the process (heap, stack, anonymous `VirtualAlloc`) |
+| `Mapped` | Memory-mapped file (data file, page file section) |
+| `Image` | Executable image mapped from disk (DLL or EXE) |
+| `Free` | Unallocated virtual address space |
+
+## Protection flags
+
+Protection flags indicate what operations are permitted on the pages. Common values:
+
+| Flag | Read | Write | Execute |
+|---|---|---|---|
+| `NA` (No Access) | — | — | — |
+| `R` | Yes | — | — |
+| `RW` | Yes | Yes | — |
+| `RX` | Yes | — | Yes |
+| `RWX` | Yes | Yes | Yes |
+| `WC` | Write-combine (GPU memory) | | |
+
+Additional modifiers: `G` (guard page), `NC` (no cache).
+
+<Warning>
+  Regions with `RWX` (read-write-execute) protection are unusual in legitimate software and are often associated with injected code or shellcode. Investigate any unexpected `RWX` regions.
+</Warning>
+
+## Reading and writing memory
+
+Right-click any region and choose **Read/Write memory** to open the memory editor.
+
+<Steps>
+  <Step title="Navigate to an address">
+    The editor opens at the base address of the selected region. Enter any virtual address in the address box to jump directly to it.
+  </Step>
+  <Step title="Edit bytes">
+    Click any byte or ASCII character in the editor to place the cursor there, then type the new value. Changes are written directly into the process's address space using `NtWriteVirtualMemory`.
+  </Step>
+  <Step title="Save a region to disk">
+    Right-click a region in the memory list and choose **Save** to dump the region's contents to a file for offline analysis.
+  </Step>
+</Steps>
+
+<Warning>
+  Writing to a process's memory can crash the target process or produce unpredictable behavior. Use this feature carefully and only on processes you control or understand.
+</Warning>
+
+## Changing page protection
+
+Right-click a committed (non-free) region and choose **Change protection** to modify the page protection flags.
+
+<Steps>
+  <Step title="Select a region">
+    Select one or more non-free region rows in the memory list.
+  </Step>
+  <Step title="Choose the new protection">
+    Pick the desired protection from the dropdown (e.g., change `RX` to `RW` to allow patching a code section).
+  </Step>
+  <Step title="Apply">
+    System Informer calls `NtProtectVirtualMemory` to apply the change immediately.
+  </Step>
+</Steps>
+
+## Freeing and decommitting memory
+
+<CardGroup cols={2}>
+  <Card title="Decommit" icon="eraser">
+    Releases the physical pages backing a region without freeing the virtual address range. The region transitions from `Committed` to `Reserved`. Available for private regions only.
+  </Card>
+  <Card title="Free" icon="trash">
+    Releases the virtual address range entirely, making it `Free`. Equivalent to `VirtualFree` with `MEM_RELEASE`.
+  </Card>
+</CardGroup>
+
+<Warning>
+  Freeing or decommitting memory that a process is actively using will almost certainly crash the target process immediately.
+</Warning>
+
+## Memory search
+
+System Informer can search the virtual address space of a process for byte patterns or strings.
+
+<Steps>
+  <Step title="Open the memory search">
+    In the Memory tab of a process, click the **Find** button in the toolbar, or use the **Ctrl+F** shortcut.
+  </Step>
+  <Step title="Choose a search type">
+    Select **String** to search for a UTF-8, UTF-16, or ASCII text string, or **Hex** to search for a specific sequence of bytes expressed in hexadecimal.
+  </Step>
+  <Step title="Enter the pattern">
+    Type the search term. For hex patterns, use space-separated byte values (e.g., `4D 5A 90 00`).
+  </Step>
+  <Step title="Start the search">
+    Click **Find**. System Informer reads each committed, non-free region and reports all matches with their virtual addresses.
+  </Step>
+  <Step title="Navigate to a match">
+    Double-click any match in the results list to jump to that address in the memory editor.
+  </Step>
+</Steps>
+
+## Heap inspection
+
+System Informer can enumerate heap allocations inside a process when the kernel driver (`KSystemInformer`) is loaded.
+
+<AccordionGroup>
+  <Accordion title="Viewing heap segments">
+    Private memory regions tagged as `Heap` in the **Use** column represent heap segments. Expand an allocation base row to see individual committed and uncommitted sub-regions within the segment.
+  </Accordion>
+  <Accordion title="Identifying heap blocks">
+    When the driver is active, the **Use** column annotates heap-backed regions with the heap ID and whether they are the process heap or a custom heap created by the application.
+  </Accordion>
+  <Accordion title="Stack regions">
+    Thread stacks appear as `Stack` in the **Use** column. Guard pages at the end of each stack are shown with `G` in the protection column. The stack size, committed portion, and guard page are visible as separate sub-regions.
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  The **ExtendedTools** plugin adds heap snapshot capabilities that let you diff heap allocations between two points in time, which is useful for diagnosing memory leaks.
+</Tip>

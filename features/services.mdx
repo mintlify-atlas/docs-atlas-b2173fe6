@@ -1,0 +1,138 @@
+---
+title: "Service management"
+description: "View, control, and configure Windows services with more detail and flexibility than the built-in services.msc snap-in."
+---
+
+The **Services** tab lists every service registered with the Windows Service Control Manager (SCM), including kernel drivers. It updates in real time when services are added, removed, or change state — without requiring a manual refresh.
+
+## Services list columns
+
+The default visible columns are:
+
+| Column | Description |
+|---|---|
+| **Name** | Internal service name (used by `sc.exe` and the SCM) |
+| **PID** | Process ID of the hosting process, if the service is running |
+| **Display name** | Human-readable name shown in the Services console |
+| **Type** | Service type: Win32 own process, Win32 share process, kernel driver, file system driver, or interactive |
+| **Status** | Current state: Running, Stopped, Paused, Start Pending, Stop Pending, and so on |
+| **Start type** | Boot, System, Automatic, Automatic (Delayed), Manual, or Disabled |
+
+Optional columns you can enable:
+
+- **Binary path** — Full path to the service executable or driver file, including command-line arguments
+- **Error control** — What happens on a service failure: Ignore, Normal, Severe, or Critical
+- **Group** — The service group this service belongs to (controls load order)
+- **Description** — The service's long description string
+- **Key modified time** — Last time the service's registry key was written (useful for detecting tampered services)
+- **Verification status** and **Verified signer** — Digital signature information for the service binary
+- **File name** — Resolved image path (separate from the binary path with arguments stripped)
+- **Username** — The account the service runs under
+- **Exit code** — Win32 exit code reported when the service last stopped
+- **Timeline** — Graphical bar showing when the service registry key was last modified
+
+## Color highlighting
+
+| Color | Meaning |
+|---|---|
+| Green | Newly detected service |
+| Red | Recently removed service |
+| Yellow background | Service binary has an untrusted or unknown digital signature |
+| Gray background | Service is disabled (start type = Disabled and currently stopped) |
+| Gray foreground | Service is stopped but not disabled |
+
+## Service actions
+
+Right-click any service to access the following actions:
+
+<CardGroup cols={2}>
+  <Card title="Start" icon="play">
+    Starts a stopped service. Equivalent to `sc.exe start <name>` but shows error details if the start fails.
+  </Card>
+  <Card title="Stop" icon="stop">
+    Sends a stop control to a running service. If the service does not accept stop controls, the option is grayed out.
+  </Card>
+  <Card title="Pause / Continue" icon="pause">
+    Pauses or resumes a service, if the service reports that it accepts pause/continue controls.
+  </Card>
+  <Card title="Delete" icon="trash">
+    Marks the service for deletion. The service is fully removed after all handles to it are closed (usually after a restart, or immediately if the service is already stopped).
+  </Card>
+  <Card title="Open key" icon="key">
+    Opens the service's registry key (`HKLM\SYSTEM\CurrentControlSet\Services\<name>`) in the registry editor.
+  </Card>
+  <Card title="Go to process" icon="arrow-right">
+    Switches to the Processes tab and highlights the process hosting this service.
+  </Card>
+  <Card title="Properties" icon="circle-info">
+    Opens the service properties dialog.
+  </Card>
+  <Card title="Copy" icon="copy">
+    Copies selected service rows to the clipboard as tab-separated text.
+  </Card>
+</CardGroup>
+
+## Service properties
+
+Double-click a service to open its properties dialog.
+
+<Steps>
+  <Step title="General tab">
+    Displays the display name, description, service type, start type, error control, binary path (with arguments), service group, and the account the service logs on as.
+  </Step>
+  <Step title="Recovery tab">
+    Shows the configured failure actions — what the SCM does if the service crashes: restart, run a program, or reboot. Includes the reset period and reboot message.
+  </Step>
+  <Step title="Dependencies tab">
+    Lists services and groups that must start before this service (**Depends on**), and services that depend on this service (**Dependents**).
+  </Step>
+  <Step title="Logon tab">
+    Shows and lets you change the account the service runs under, including entering or changing the password for account-based logon.
+  </Step>
+</Steps>
+
+## Creating a new service
+
+<Steps>
+  <Step title="Open the New Service dialog">
+    Go to **Services** tab, then click **New service** in the toolbar, or select **File → New → Service**.
+  </Step>
+  <Step title="Fill in the service details">
+    Enter the service name (internal identifier), display name, binary path (the full path to the executable), service type (Win32 own process, Win32 shared process, or driver), and start type.
+  </Step>
+  <Step title="Configure logon account">
+    Choose **Local System**, **Network Service**, **Local Service**, or a specific user account with a password.
+  </Step>
+  <Step title="Click OK">
+    System Informer calls `CreateService` via the SCM. The service appears in the list immediately.
+  </Step>
+</Steps>
+
+## Comparison with services.msc
+
+System Informer provides several capabilities that the built-in Services snap-in (`services.msc`) does not:
+
+<AccordionGroup>
+  <Accordion title="Real-time state updates">
+    The Services tab updates automatically when a service starts or stops. In `services.msc` you must press F5 to refresh.
+  </Accordion>
+  <Accordion title="Per-service process navigation">
+    You can jump directly to the hosting process in the Processes tab. `services.msc` does not show PIDs by default and has no process integration.
+  </Accordion>
+  <Accordion title="Digital signature verification">
+    System Informer verifies the Authenticode signature of each service binary and color-codes untrusted services. `services.msc` provides no signature information.
+  </Accordion>
+  <Accordion title="Registry key modification timestamp">
+    The **Key modified time** column shows when each service's registry key was last written, which can reveal recently installed or tampered services. `services.msc` has no equivalent.
+  </Accordion>
+  <Accordion title="Kernel driver visibility">
+    System Informer shows kernel-mode driver services alongside Win32 services. `services.msc` shows drivers only when the **Type** filter includes drivers.
+  </Accordion>
+  <Accordion title="Service binary path">
+    The **Binary path** column displays the full executable path including arguments. `services.msc` shows the path only inside the properties dialog.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  Stopping or deleting a system service can destabilize or crash Windows. Always verify the service name and understand its dependencies before taking action.
+</Warning>

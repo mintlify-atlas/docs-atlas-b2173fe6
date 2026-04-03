@@ -1,0 +1,144 @@
+---
+title: "Customizing columns"
+description: "Show, hide, reorder, and save column layouts in every System Informer list view."
+---
+
+Every list in System Informer — Processes, Services, Network connections, Handles, Memory, Threads, and more — uses a tree-list control whose columns you can fully customize. Your column layout is persisted in the settings file and restored the next time you open that view.
+
+## Showing and hiding columns
+
+<Steps>
+  <Step title="Open the column menu">
+    Right-click any column header in the list you want to customize. A context menu appears listing every available column for that view.
+  </Step>
+  <Step title="Toggle a column">
+    Click a column name to toggle its visibility. A check mark indicates the column is currently visible.
+  </Step>
+  <Step title="Choose more columns">
+    Select **More…** at the bottom of the menu to open the full column manager dialog. It lists all columns with checkboxes, including those added by plugins.
+  </Step>
+</Steps>
+
+<Tip>
+  You can also drag a column header to the left or right to reorder visible columns. Column widths are adjusted by dragging the divider between two column headers.
+</Tip>
+
+## Available columns by view
+
+<Tabs>
+  <Tab title="Processes">
+    | Column | Description |
+    |---|---|
+    | Name | Process image name (with optional description via tooltip) |
+    | PID | Process ID |
+    | CPU | Total CPU usage (kernel + user) as a percentage |
+    | I/O total rate | Combined I/O bytes per second (read + write + other) |
+    | Private bytes | Pages committed exclusively by this process |
+    | Working set | Physical memory currently used |
+    | Peak working set | Maximum physical memory used since start |
+    | Peak private bytes | Maximum commit charge since start |
+    | Virtual size | Total virtual address space reserved and committed |
+    | Page faults | Cumulative hard and soft page faults |
+    | Session | Windows session ID |
+    | User name | Account under which the process runs |
+    | Parent PID (PPID) | PID of the process that created this one |
+    | Base priority | Scheduling priority class |
+    | Start time | When the process was created |
+    | CPU time | Total CPU time consumed (kernel + user) |
+    | I/O reads / writes | Individual I/O operation counters |
+    | I/O read / write bytes | Cumulative bytes transferred |
+    | Handle count | Open kernel handles |
+    | GDI / USER handles | GDI and USER object counts |
+    | Integrity | Process integrity level (Low, Medium, High, System) |
+    | Description | Version-info product description |
+    | Company name | Version-info company |
+    | File name | Full path to the executable |
+    | Command line | Full command line including arguments |
+    | .NET CLR | Indicates a managed (.NET) process |
+    | Elevated | Runs with administrator rights |
+    | Packed | Detected as a packed/protected binary |
+    | Coherency | Image coherency level |
+  </Tab>
+  <Tab title="Services">
+    | Column | Description |
+    |---|---|
+    | Name | Service internal name |
+    | Display name | Human-readable service name |
+    | Type | Service type (Win32OwnProcess, KernelDriver, etc.) |
+    | Status | Running, Stopped, Paused, etc. |
+    | Start type | Automatic, Manual, Disabled, Boot, System |
+    | PID | Process ID hosting the service (if applicable) |
+    | Binary path | Full path to the service executable |
+    | File modified time | Last-modified timestamp of the binary |
+    | Description | Service description from the registry |
+  </Tab>
+  <Tab title="Network">
+    | Column | Description |
+    |---|---|
+    | Process | Owning process name and PID |
+    | Protocol | TCP, UDP, TCPv6, or UDPv6 |
+    | Local address | Local IP address |
+    | Local port | Local port number |
+    | Remote address | Remote IP or resolved hostname |
+    | Remote port | Remote port number |
+    | State | Connection state (Established, Listen, Close Wait, etc.) |
+    | Owner | Service or process owning the socket |
+    | Time stamp | When the connection was established |
+    | Local address (text) | Resolved local hostname |
+    | Remote address (text) | Resolved remote hostname |
+  </Tab>
+  <Tab title="Handles">
+    | Column | Description |
+    |---|---|
+    | Name | Object name (file path, registry key, etc.) |
+    | Type | Kernel object type (File, Key, Event, Mutex, etc.) |
+    | Handle | Hex handle value |
+    | Object address | Kernel object pointer |
+    | Granted access | Decoded access rights |
+    | References | Reference count |
+    | Attributes | Object attribute flags (Inherit, ProtectFromClose) |
+    | File share access | For file handles: Read, Write, Delete sharing |
+  </Tab>
+</Tabs>
+
+## Sorting
+
+Click any column header to sort the list by that column. Click again to reverse the sort order. An arrow icon indicates the active sort column and direction.
+
+<Note>
+  Sorting by a column provided by a plugin uses that plugin's custom comparison function. The sort direction and column are saved to settings alongside the column layout.
+</Note>
+
+## Column sets
+
+Column sets let you save and restore named column layouts. This is useful when you switch between different workflows — for example, a security-focused layout that shows integrity and coherency columns, and a performance-focused layout that shows CPU, I/O, and memory columns.
+
+<Steps>
+  <Step title="Save a column set">
+    Arrange the columns the way you want them. Then right-click a column header and choose **Save column set…**. Enter a name and click **OK**. The layout — including column visibility, order, width, and current sort — is saved.
+  </Step>
+  <Step title="Load a column set">
+    Right-click a column header and choose **Load column set…** (or select a named set directly from the submenu if one is shown). The list instantly rearranges to match the saved layout.
+  </Step>
+  <Step title="Manage saved column sets">
+    Right-click a column header and choose **Manage column sets…** to open the column set editor. From there you can rename, reorder, or delete saved sets.
+  </Step>
+</Steps>
+
+<Accordion title="How column sets are stored">
+  Column sets are serialized into a single settings key (for example, `ProcessTreeColumnSetConfig` for the process tree). The format encodes the count of sets followed by each set's name, column layout string, and sort string, separated by dashes. You can inspect or edit this directly in `SystemInformer.exe.settings.xml` if needed.
+</Accordion>
+
+## Plugin-provided columns
+
+Plugins can register additional columns in any supported list view. These appear in the column toggle menu and the column manager dialog alongside the built-in columns. Plugin columns are identified internally with a `+PluginName+SubId` compound ID and are saved and loaded transparently alongside built-in column settings.
+
+<Accordion title="Examples of plugin columns">
+  - **Network tools plugin** — Adds country/flag and ASN columns to the Network list.
+  - **Online checks plugin** — Adds VirusTotal detection count columns to the process and service lists.
+  - **Hardware devices plugin** — Adds device-specific columns to the Processes list.
+</Accordion>
+
+<Warning>
+  If you disable a plugin that provided columns to a view, those columns are automatically hidden. Re-enabling the plugin and restarting restores them.
+</Warning>

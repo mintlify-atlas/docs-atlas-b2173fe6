@@ -1,0 +1,247 @@
+---
+title: "phnt — Native API headers"
+description: "How to use phnt, the most comprehensive set of Windows Native API definitions available, including version targeting, header categories, and plugin integration."
+---
+
+`phnt` is a collection of Windows Native API header files that has been maintained since 2009 for the System Informer project (originally Process Hacker). It is the most up-to-date set of Native API definitions available — definitions have been gathered from official Microsoft header files and symbol files, as well as extensive reverse engineering.
+
+`phnt` forms the foundation that `phlib`, `kphlib`, and all plugins build on. It is also available as a standalone project for use in any Windows user-mode or kernel-mode program that needs Native API access.
+
+## Basic usage
+
+Replace your usual `#include <windows.h>` with:
+
+```c
+#include <phnt_windows.h>
+#include <phnt.h>
+```
+
+`phnt_windows.h` pulls in `<windows.h>` along with `NTSTATUS` values and Win32 access mask definitions, and sets up the preprocessor guards that `phnt.h` depends on. `phnt.h` then includes the individual category headers in the correct order.
+
+<Note>
+  Make sure your project targets the latest Windows SDK. The headers are designed around current SDK types; older SDKs may be missing required definitions.
+</Note>
+
+## Version targeting with PHNT_VERSION
+
+By default `phnt.h` includes definitions for all known Windows versions (`PHNT_WINDOWS_NEW`). To restrict to a specific minimum OS version, define `PHNT_VERSION` before including `phnt.h`:
+
+```c
+#define PHNT_VERSION PHNT_WINDOWS_10
+#include <phnt_windows.h>
+#include <phnt.h>
+```
+
+The available version constants, with their numeric values and approximate release dates:
+
+| Constant | Value | Windows version |
+|---|---|---|
+| `PHNT_WINDOWS_XP` | 51 | Windows XP (August 2001) |
+| `PHNT_WINDOWS_SERVER_2003` | 52 | Windows Server 2003 (April 2003) |
+| `PHNT_WINDOWS_VISTA` | 60 | Windows Vista (November 2006) |
+| `PHNT_WINDOWS_7` | 61 | Windows 7 (July 2009) |
+| `PHNT_WINDOWS_8` | 62 | Windows 8 (August 2012) |
+| `PHNT_WINDOWS_8_1` | 63 | Windows 8.1 (August 2013) |
+| `PHNT_WINDOWS_10` | 100 | Windows 10 1507, build 10240 (July 2015) |
+| `PHNT_WINDOWS_10_TH2` | 101 | Windows 10 1511, build 10586 (November 2015) |
+| `PHNT_WINDOWS_10_RS1` | 102 | Windows 10 1607, build 14393 (August 2016) |
+| `PHNT_WINDOWS_10_RS2` | 103 | Windows 10 1703, build 15063 (April 2017) |
+| `PHNT_WINDOWS_10_RS3` | 104 | Windows 10 1709, build 16299 (October 2017) |
+| `PHNT_WINDOWS_10_RS4` | 105 | Windows 10 1803, build 17134 (April 2018) |
+| `PHNT_WINDOWS_10_RS5` | 106 | Windows 10 1809, build 17763 (November 2018) |
+| `PHNT_WINDOWS_10_19H1` | 107 | Windows 10 1903, build 18362 (May 2019) |
+| `PHNT_WINDOWS_10_20H1` | 109 | Windows 10 2004, build 19041 (May 2020) |
+| `PHNT_WINDOWS_11` | 114 | Windows 11, build 22000 (October 2021) |
+| `PHNT_WINDOWS_11_22H2` | 115 | Windows 11 22H2, build 22621 (September 2022) |
+| `PHNT_WINDOWS_11_23H2` | 116 | Windows 11 23H2, build 22631 (October 2023) |
+| `PHNT_WINDOWS_11_24H2` | 117 | Windows 11 24H2, build 26100 (October 2024) |
+| `PHNT_WINDOWS_NEW` | `ULONG_MAX` | All known versions (default) |
+
+Definitions guarded by a version check are conditionally compiled out when you target an older OS. This lets you catch API usage that would not be available on your minimum supported platform.
+
+## Definition reliability annotations
+
+The source comments in `phnt.h` document the reliability of each definition:
+
+| Annotation | Meaning |
+|---|---|
+| *(none)* | Retrieved from an official Microsoft source |
+| `dbg` | Obtained from a debug message or assertion in a checked kernel build |
+| `symbols, private` | From symbol files; types may be incorrect |
+| `winbase` | Reconstructed from Win32-ized NT definitions in `winbase.h`; names or types may be wrong |
+| `rev` | Reverse-engineered |
+
+## Header categories
+
+`phnt.h` includes the following headers in dependency order. All files live in `phnt/include/`.
+
+<AccordionGroup>
+  <Accordion title="Core NT types and definitions">
+    | Header | Contents |
+    |---|---|
+    | `phnt_ntdef.h` | Core NT type definitions and macros not in the public SDK |
+    | `ntnls.h` | National Language Support (NLS) locale and code-page types |
+    | `ntintsafe.h` | Integer overflow-safe arithmetic intrinsics |
+    | `nttypesafe.h` | Type-safe NT pointer and size helpers |
+    | `ntkeapi.h` | Kernel executive API types (`KPROCESSOR_MODE`, `KWAIT_REASON`, …) |
+  </Accordion>
+
+  <Accordion title="Process and thread APIs">
+    | Header | Contents |
+    |---|---|
+    | `ntpsapi.h` | Process and thread information classes, `NtQueryInformationProcess`, `NtQueryInformationThread`, `PEB`, `TEB`, `PROCESS_BASIC_INFORMATION`, job objects |
+    | `ntpebteb.h` | `PEB` and `TEB` structure layouts |
+    | `nttp.h` | NT thread pool (`TP_POOL`, `TP_WORK`, `TP_TIMER`, `TP_IO`) |
+  </Accordion>
+
+  <Accordion title="Memory management">
+    | Header | Contents |
+    |---|---|
+    | `ntmmapi.h` | Virtual memory (`NtAllocateVirtualMemory`, `NtMapViewOfSection`, `MEMORY_BASIC_INFORMATION`), section objects, and working-set APIs |
+    | `ntpfapi.h` | Page-file and prefetch APIs |
+  </Accordion>
+
+  <Accordion title="Object manager">
+    | Header | Contents |
+    |---|---|
+    | `ntobapi.h` | Object manager types and query functions (`NtQueryObject`, `OBJECT_BASIC_INFORMATION`, `OBJECT_TYPE_INFORMATION`) |
+    | `ntldr.h` | Loader structures (`LDR_DATA_TABLE_ENTRY`, `PEB_LDR_DATA`) and image loading |
+    | `ntimage.h` | NT image (PE) header structures (`IMAGE_NT_HEADERS`, `IMAGE_SECTION_HEADER`) |
+  </Accordion>
+
+  <Accordion title="I/O and file system">
+    | Header | Contents |
+    |---|---|
+    | `ntioapi.h` | File I/O (`NtCreateFile`, `NtReadFile`, `NtWriteFile`, `IO_STATUS_BLOCK`, `FILE_*_INFORMATION` classes), device I/O, and directory enumeration |
+    | `ntafd.h` | Ancillary Function Driver (AFD) socket I/O control codes |
+    | `ntpnpapi.h` | Plug and Play manager notifications |
+    | `ntpoapi.h` | Power management notifications and query APIs |
+  </Accordion>
+
+  <Accordion title="Registry">
+    | Header | Contents |
+    |---|---|
+    | `ntregapi.h` | Registry key and value operations (`NtCreateKey`, `NtQueryValueKey`, `KEY_*_INFORMATION` classes), registry transactions, and symbolic links |
+  </Accordion>
+
+  <Accordion title="Security">
+    | Header | Contents |
+    |---|---|
+    | `ntseapi.h` | Token objects, privilege adjustments, mandatory integrity labels, and security descriptor operations |
+    | `ntsam.h` | Security Account Manager (SAM) database and account APIs |
+    | `ntlsa.h` | Local Security Authority policy, trust, and credential APIs |
+    | `ntdbg.h` | Kernel debug port and user-mode debugging (`NtCreateDebugObject`, `NtDebugActiveProcess`, `NtWaitForDebugEvent`) |
+  </Accordion>
+
+  <Accordion title="Networking">
+    | Header | Contents |
+    |---|---|
+    | `ntafd.h` | AFD IOCTL codes for socket operations (used by `ws2_32.dll` internally) |
+  </Accordion>
+
+  <Accordion title="Runtime library and miscellaneous">
+    | Header | Contents |
+    |---|---|
+    | `ntrtl.h` | RTL utility functions (string manipulation, AVL trees, heap, RB trees, time conversion) |
+    | `ntexapi.h` | Executive APIs: system information (`NtQuerySystemInformation`), event pairs, atom tables, firmware tables, system environment variables |
+    | `ntlpcapi.h` | Local Procedure Call (LPC/ALPC) port objects and message passing |
+    | `ntmisc.h` | Miscellaneous NT APIs (boot entries, environment values, vdm) |
+    | `ntsxs.h` | Side-by-side assembly (SxS / activation contexts) |
+    | `nttmapi.h` | Kernel Transaction Manager (KTM) — transactional NTFS and registry |
+    | `ntxcapi.h` | Exception handling and context records |
+    | `ntzwapi.h` | `Zw*` equivalents for all NT system calls |
+    | `ntwmi.h` | WMI / ETW provider registration and event types |
+    | `ntwow64.h` | WOW64 (32-on-64) process and thread structures |
+    | `ntuser.h` | Win32k user-mode API extensions (window stations, desktops) |
+    | `ntgdi.h` | Win32k GDI kernel-mode extensions |
+    | `ntd3dkmt.h` | D3DKMT GPU kernel mode thunk types |
+    | `ntbcd.h` | Boot Configuration Data (BCD) store types |
+    | `ntsmss.h` | Session Manager Subsystem (SMSS) communication types |
+    | `ntkeapi.h` | Kernel executive enumerations and types |
+  </Accordion>
+
+  <Accordion title="Additional standalone headers">
+    | Header | Contents |
+    |---|---|
+    | `smbios.h` | SMBIOS table structure definitions |
+    | `subprocesstag.h` | Service tag query for threads hosting service DLLs |
+    | `usermgr.h` | User manager service types |
+    | `winsta.h` | Window station and session enumeration |
+  </Accordion>
+</AccordionGroup>
+
+## Kernel-mode support
+
+`phnt` can be used in kernel-mode drivers. Define `PHNT_MODE` before inclusion:
+
+```c
+#define PHNT_MODE PHNT_MODE_KERNEL
+#include <phnt.h>
+```
+
+In kernel mode, `phnt.h` omits headers that are only valid in user space (such as `ntdbg.h`, `ntlpcapi.h`, and `ntuser.h`) and adjusts type definitions accordingly. `kphlib` uses this path — its base header conditionally selects between kernel and user includes:
+
+```c
+// kphlib/include/kphlibbase.h
+#ifdef _KERNEL_MODE
+#include <ntifs.h>
+// ...
+#else
+#include <phnt_windows.h>
+#include <phnt.h>
+#endif
+```
+
+## Using phnt in a plugin
+
+Plugins include `phnt` indirectly through `phlib`. Include the phlib umbrella header:
+
+```c
+#include <ph.h>
+```
+
+`ph.h` pulls in `phbase.h`, which includes `phnt_windows.h` and `phnt.h` in the correct order before any phlib-specific headers. You therefore get the full Native API surface automatically.
+
+<Tip>
+  If you are writing a standalone program that does not use phlib, include `phnt_windows.h` and `phnt.h` directly. If you only need a subset of APIs you can include individual category headers (such as `ntpsapi.h` for process/thread info) after `phnt_windows.h` and `phnt_ntdef.h`.
+</Tip>
+
+## Definition annotation example
+
+Reading the header comments tells you how reliable a given definition is:
+
+```c
+// ntpsapi.h (excerpt)
+typedef struct _PROCESS_BASIC_INFORMATION      // official SDK type
+{
+    NTSTATUS ExitStatus;
+    PPEB PebBaseAddress;
+    ULONG_PTR AffinityMask;
+    KPRIORITY BasePriority;
+    ULONG_PTR UniqueProcessId;
+    ULONG_PTR InheritedFromUniqueProcessId;
+} PROCESS_BASIC_INFORMATION, *PPROCESS_BASIC_INFORMATION;
+
+// rev — reverse-engineered; field names and types may not be exact
+typedef struct _PROCESS_PROTECTION_INFORMATION
+{
+    PS_PROTECTION Protection;
+} PROCESS_PROTECTION_INFORMATION, *PPROCESS_PROTECTION_INFORMATION;
+```
+
+Unannotated definitions (like `PROCESS_BASIC_INFORMATION` above) come from official Microsoft sources and can be relied upon. `rev` definitions are best-effort and may change between Windows builds.
+
+<CardGroup cols={2}>
+  <Card title="Architecture overview" icon="diagram-project" href="/dev/architecture">
+    How phnt sits in the System Informer component map.
+  </Card>
+  <Card title="phlib — core library" icon="code" href="/dev/phlib">
+    The phlib library that builds on top of phnt.
+  </Card>
+  <Card title="Plugin overview" icon="puzzle-piece" href="/dev/plugin-overview">
+    How to include phnt in your own plugin via phlib.
+  </Card>
+  <Card title="Building from source" icon="hammer" href="/dev/building">
+    How to build the full project including phnt headers.
+  </Card>
+</CardGroup>

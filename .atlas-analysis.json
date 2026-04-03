@@ -1,0 +1,127 @@
+{
+  "projectType": "general",
+  "projectName": "System Informer",
+  "projectDescription": "A free, powerful, multi-purpose Windows tool for monitoring system resources, debugging software, and detecting malware — with a kernel driver, plugin SDK, and PE viewer.",
+  "theme": "aspen",
+  "primaryColor": "#90aac9",
+  "lightColor": "#3e4c56",
+  "darkColor": "#252c32",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "User Guide",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "system-requirements"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/processes",
+              "features/services",
+              "features/network",
+              "features/memory",
+              "features/handles",
+              "features/system-information"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/settings",
+              "configuration/columns",
+              "configuration/notifications"
+            ]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "tools/pe-viewer",
+              "tools/run-as",
+              "tools/find-handles"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Developer Guide",
+        "groups": [
+          {
+            "group": "Building",
+            "pages": [
+              "dev/building",
+              "dev/kernel-driver"
+            ]
+          },
+          {
+            "group": "Plugin Development",
+            "pages": [
+              "dev/plugin-overview",
+              "dev/plugin-sdk",
+              "dev/plugin-callbacks",
+              "dev/plugin-examples"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "dev/architecture",
+              "dev/phlib",
+              "dev/phnt"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "dev/contributing",
+              "dev/code-conventions",
+              "dev/security"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Real-time process monitoring with CPU, memory, I/O, and network graphs",
+    "Detailed process properties including threads, modules, handles, memory maps, and token information",
+    "Windows service management (create, edit, start, stop, delete)",
+    "Active network connections view with process attribution",
+    "Kernel driver (KSystemInformer) for deep system inspection and malware detection",
+    "Plugin system with an SDK for extending System Informer's functionality",
+    "PE file viewer (peview) for inspecting executable file internals",
+    "Native API header collection (phnt) for Windows internals development",
+    "Memory editor and heap inspection",
+    "Stack trace viewer with kernel-mode, WOW64, and .NET support",
+    "ETW (Event Tracing for Windows) integration for disk, GPU, and network monitoring",
+    "GPU and NPU monitoring via DirectX/D3DKMT",
+    ".NET process inspection (assemblies, CLR performance counters)",
+    "Portable — no installation required"
+  ],
+  "publicApiSurface": [
+    "PhCreateProcess / PhTerminateProcess / PhSuspendProcess / PhResumeProcess",
+    "PhEnumProcesses / PhGetProcessItem",
+    "PhOpenProcess / PhOpenThread / PhOpenKey",
+    "PhCreateString / PhConcatStrings / PhFormatString / PhDereferenceObject",
+    "PhAllocate / PhFree / PhAutoDereferenceObject",
+    "PhRegisterCallback / PhUnregisterCallback / PhInvokeCallback",
+    "PhCreateThread / PhCreateThreadEx",
+    "PhQueuedLockAcquireExclusive / PhQueuedLockReleaseExclusive",
+    "PhLoadPlugin / PPH_PLUGIN (plugin registration struct)",
+    "PH_GENERAL_CALLBACK enum (plugin callback events)",
+    "PH_PLUGIN_CALLBACK enum (PluginCallbackLoad, PluginCallbackUnload, etc.)",
+    "PhPluginGetSystemStatistics",
+    "PhGetFileProcIds (find processes using a file)",
+    "PhVerifyFile / PhVerifyFileWithAdditionalCatalogs",
+    "PH_HASHTABLE / PH_AVL_LINKS / PH_LIST / PH_ARRAY / PH_CIRCULAR_BUFFER",
+    "PhGetProcessImageFileName / PhGetProcessCommandLine",
+    "PhGetServiceConfig / PhChangeServiceConfig",
+    "PHLIBAPI / PHAPPAPI (export macros for plugin linking)",
+    "phnt headers: NtQuerySystemInformation, NtQueryInformationProcess, etc."
+  ]
+}

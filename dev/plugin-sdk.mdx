@@ -1,0 +1,229 @@
+---
+title: "Plugin SDK"
+description: "How to obtain the System Informer Plugin SDK, configure your project, and register a plugin DLL."
+---
+
+The Plugin SDK provides the header files, import libraries, and sample projects you need to build your own System Informer plugin.
+
+## Getting the SDK
+
+The SDK is not distributed as a separate download — you build it from the source tree:
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/winsiderss/systeminformer.git
+    ```
+  </Step>
+  <Step title="Run the SDK build script">
+    From a Developer Command Prompt, run:
+    ```bat
+    build\build_sdk.cmd
+    ```
+    This compiles the necessary libraries for all configurations (Debug/Release) and architectures (Win32, x64, ARM64) and assembles the SDK output.
+  </Step>
+  <Step title="Point your project at the SDK output">
+    Add the SDK `include` directory to your compiler's include path and the appropriate `lib\<platform>` directory (for example `lib\amd64` for 64-bit) to your linker's library path.
+  </Step>
+</Steps>
+
+## SDK layout
+
+```
+sdk/
+├── include/      # All public headers
+├── lib/
+│   ├── i386/     # 32-bit import libraries
+│   ├── amd64/    # 64-bit import libraries
+│   └── arm64/    # ARM64 import libraries
+└── samples/      # Sample plugin projects
+```
+
+The Doxygen-generated API reference is placed under `sdk\doc\doxygen` by the build script.
+
+## Required headers and libraries
+
+Every plugin must include `<phdk.h>` as its top-level SDK header. That single include pulls in:
+
+- `ph.h` — core phlib types and utilities
+- `phnet.h` — network types
+- `provider.h`, `filestream.h`, `fastlock.h`, `lsasup.h`, `svcsup.h` — support libraries
+- `circbuf.h`, `dltmgr.h`, `guisup.h`, `treenew.h`, `graph.h`, `emenu.h`, `cpysave.h` — UI components
+- `phapppub.h` — the public System Informer application API
+
+```c
+#include <phdk.h>
+```
+
+Your plugin DLL must link against at minimum:
+
+```
+SystemInformer.lib
+ntdll.lib
+```
+
+## Targeting specific Windows versions
+
+By default `phdk.h` defines `PHNT_VERSION` to `PHNT_WINDOWS_NEW`. If you need Native API structures that only exist on Windows 8 or later, override the macro **before** including the header:
+
+```c
+#define PHNT_VERSION PHNT_WIN8   // or PHNT_WIN10, PHNT_WINDOWS_NEW, etc.
+#include <phdk.h>
+```
+
+## Export macros
+
+Two macros control whether a symbol is exported from the host or from phlib:
+
+| Macro | Where it appears | Meaning for plugins |
+|---|---|---|
+| `PHLIBAPI` | phlib (`ph.h`) | Symbol exported from `phlib.dll` — available to plugins |
+| `PHAPPAPI` | System Informer app | Symbol exported from `SystemInformer.exe` — available to plugins |
+
+If you get an unresolved-external linker error, check whether the function you are calling carries one of these macros in its declaration. If it does not, the function is internal and cannot be used from a plugin.
+
+From `SystemInformer/sdk/readme.txt`:
+
+> Some functions are not exported by System Informer. If you receive linker errors, check if the relevant function is marked with `PHLIBAPI` or `PHAPPAPI`; if not, the function cannot be used by your plugin.
+
+## Plugin registration
+
+Every plugin is a standard Windows DLL. System Informer calls your `DllMain` with `DLL_PROCESS_ATTACH` during loading. Your `DllMain` must call `PhRegisterPlugin` to obtain a `PPH_PLUGIN` handle, fill in the information structure, and register any callbacks before returning.
+
+### The `PH_PLUGIN` structure
+
+```c
+typedef struct _PH_PLUGIN
+{
+    PH_AVL_LINKS Links;     // used internally by the host
+
+    PVOID DllBase;          // your HINSTANCE, set by the host
+
+    // private fields follow...
+} PH_PLUGIN, *PPH_PLUGIN;
+```
+
+The fields you interact with are accessed through the `PPH_PLUGIN_INFORMATION` pointer returned by `PhRegisterPlugin`:
+
+```c
+typedef struct _PH_PLUGIN_INFORMATION
+{
+    PCWSTR DisplayName;     // shown in the Plugins dialog
+    PCWSTR Author;
+    PCWSTR Description;
+    PCWSTR Url;
+    BOOLEAN HasOptions;     // whether to show an Options button
+    BOOLEAN Reserved1[3];
+    PVOID Interface;        // optional inter-plugin interface pointer
+} PH_PLUGIN_INFORMATION, *PPH_PLUGIN_INFORMATION;
+```
+
+### Registration API
+
+```c
+PHAPPAPI
+PPH_PLUGIN
+NTAPI
+PhRegisterPlugin(
+    _In_ PCWSTR Name,
+    _In_ PVOID DllBase,
+    _Out_opt_ PPH_PLUGIN_INFORMATION *Information
+    );
+```
+
+`Name` is a unique string identifier for your plugin (by convention, the DLL filename without the extension). If a plugin with the same name is already loaded, `PhRegisterPlugin` returns `NULL` and your `DllMain` should return `FALSE`.
+
+### Minimal `DllMain` example
+
+The pattern below is extracted directly from `plugins/NetworkTools/main.c`:
+
+```c
+PPH_PLUGIN PluginInstance;
+PH_CALLBACK_REGISTRATION PluginLoadCallbackRegistration;
+PH_CALLBACK_REGISTRATION PluginMenuItemCallbackRegistration;
+PH_CALLBACK_REGISTRATION MainMenuInitializingCallbackRegistration;
+PH_CALLBACK_REGISTRATION NetworkMenuInitializingCallbackRegistration;
+
+LOGICAL DllMain(
+    _In_ HINSTANCE Instance,
+    _In_ ULONG Reason,
+    _Reserved_ PVOID Reserved
+    )
+{
+    switch (Reason)
+    {
+    case DLL_PROCESS_ATTACH:
+        {
+            PPH_PLUGIN_INFORMATION info;
+            PH_SETTING_CREATE settings[] =
+            {
+                { StringSettingType, SETTING_NAME_ADDRESS_HISTORY, L"" },
+                { IntegerSettingType, SETTING_NAME_PING_TIMEOUT, L"3e8" },
+                // ... more settings ...
+            };
+
+            PluginInstance = PhRegisterPlugin(PLUGIN_NAME, Instance, &info);
+
+            if (!PluginInstance)
+                return FALSE;
+
+            info->DisplayName = L"Network Tools";
+            info->Description = L"Provides ping, traceroute and whois for network connections.";
+            info->Interface = &PluginInterface;
+
+            PhRegisterCallback(
+                PhGetPluginCallback(PluginInstance, PluginCallbackLoad),
+                LoadCallback,
+                NULL,
+                &PluginLoadCallbackRegistration
+                );
+            PhRegisterCallback(
+                PhGetPluginCallback(PluginInstance, PluginCallbackMenuItem),
+                MenuItemCallback,
+                NULL,
+                &PluginMenuItemCallbackRegistration
+                );
+            PhRegisterCallback(
+                PhGetGeneralCallback(GeneralCallbackMainMenuInitializing),
+                MainMenuInitializingCallback,
+                NULL,
+                &MainMenuInitializingCallbackRegistration
+                );
+            PhRegisterCallback(
+                PhGetGeneralCallback(GeneralCallbackNetworkMenuInitializing),
+                NetworkMenuInitializingCallback,
+                NULL,
+                &NetworkMenuInitializingCallbackRegistration
+                );
+
+            PhAddSettings(settings, ARRAYSIZE(settings));
+        }
+        break;
+    }
+
+    return TRUE;
+}
+```
+
+### Registering settings
+
+Call `PhAddSettings` with an array of `PH_SETTING_CREATE` structures before returning from `DllMain`. Settings are persisted to the System Informer INI file and can be read back at any time with `PhGetIntegerSetting` / `PhGetStringSetting`.
+
+### Inter-plugin interfaces
+
+A plugin can expose a typed interface struct to other plugins by assigning it to `info->Interface`. Other plugins retrieve it with:
+
+```c
+PVOID
+NTAPI
+PhGetPluginInterfaceZ(
+    _In_ PCWSTR Name,
+    _In_opt_ ULONG Version
+    );
+```
+
+This is how `ToolStatus` exposes its search-changed event to `UserNotes`.
+
+<Warning>
+  You must keep all `PH_CALLBACK_REGISTRATION` objects alive for the entire lifetime of the plugin. Declare them as global or static variables — never allocate them on the stack.
+</Warning>

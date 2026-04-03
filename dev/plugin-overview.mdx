@@ -1,0 +1,84 @@
+---
+title: "Plugin overview"
+description: "An introduction to the System Informer plugin system — what plugins are, how they extend the application, and which plugins ship in the box."
+---
+
+System Informer loads plugins at startup from a `plugins/` subdirectory next to `SystemInformer.exe`. Each plugin is a Windows DLL that registers itself with the host and then subscribes to the callbacks it cares about. Plugins can add columns to any of the main tree views, inject items into context menus and the main menu, append property pages to process and service dialogs, contribute sections to the System Information and mini-info panels, and register notification-area tray icons.
+
+## How plugins are loaded
+
+<Steps>
+  <Step title="Create the plugins directory">
+    Create a directory named `plugins` in the same folder as `SystemInformer.exe` and copy your plugin DLL into it.
+  </Step>
+  <Step title="Enable plugins in Options">
+    Open **Options → General** and make sure the **Enable plugins** checkbox is ticked, then restart System Informer.
+  </Step>
+  <Step title="Verify loading">
+    Go to **Help → Plugins** to confirm your plugin appears in the list. If it does not, check the startup error log — the host reports load failures there.
+  </Step>
+</Steps>
+
+<Note>
+  System Informer only loads plugins when the executable is named `SystemInformer.exe`. Renaming the binary will prevent plugin loading entirely.
+</Note>
+
+## Security model
+
+Plugins that are not signed by a trusted publisher receive restricted access to the kernel driver (`ksi.dll`). Unsigned plugins can still use all public `phlib` and `phapp` APIs, but elevated kernel operations will be blocked. Sign your plugin DLL with an Authenticode certificate if you require unrestricted kernel driver access.
+
+## What plugins can do
+
+Plugins hook into the application through a callback registration mechanism. The most common extension points are:
+
+| Extension point | Callback to register |
+|---|---|
+| Columns in the process, service, or network tree | `GeneralCallbackProcessTreeNewInitializing` / `GeneralCallbackNetworkTreeNewInitializing` |
+| Process context-menu items | `GeneralCallbackProcessMenuInitializing` |
+| Main menu entries (Tools submenu, etc.) | `GeneralCallbackMainMenuInitializing` |
+| Property pages for processes | `GeneralCallbackProcessPropertiesInitializing` |
+| Property pages for services | `GeneralCallbackServicePropertiesInitializing` |
+| System Information sections | `GeneralCallbackSystemInformationInitializing` |
+| Tray icons | `GeneralCallbackTrayIconsInitializing` |
+
+See [Plugin callbacks](/dev/plugin-callbacks) for the complete reference and [Plugin examples](/dev/plugin-examples) for working code.
+
+## Bundled plugins
+
+The following plugins ship in every release of System Informer and live in the `plugins/` subdirectory.
+
+<CardGroup cols={2}>
+  <Card title="ExtendedTools" icon="microchip">
+    GPU and NPU utilisation monitoring using DXGI performance counters, ETW-based disk and network I/O statistics per process, object manager browser, pool monitor, frames-per-second tracking, and TPM information.
+  </Card>
+  <Card title="NetworkTools" icon="network-wired">
+    Traceroute, ping, and WHOIS for individual network connections or user-entered addresses. Country flag lookup via a GeoLite2 database, and optional extended TCP statistics (bytes in/out, latency, jitter, packet loss).
+  </Card>
+  <Card title="DotNetTools" icon="code">
+    .NET CLR assembly inspection (loaded assemblies and app domains), CLR performance counters, and enhanced thread-stack symbol resolution for managed frames.
+  </Card>
+  <Card title="ToolStatus" icon="toolbar">
+    Adds a customisable toolbar with system-statistics graphs (CPU, memory, I/O), a status bar, and an integrated search box with Ctrl+K support for filtering the process, service, and network lists.
+  </Card>
+  <Card title="UserNotes" icon="note-sticky">
+    Attach free-text comments to processes and services, saved to a local XML database. Also lets you persist priority, I/O priority, page priority, CPU affinity, and custom row highlight colours for any process image name or command line.
+  </Card>
+  <Card title="ExtendedNotifications" icon="bell">
+    Advanced rule-based notification engine. Filter notifications by process name, service name, or event type, and route them to sound files, log files, or execute a program.
+  </Card>
+  <Card title="HardwareDevices" icon="server">
+    Per-disk and per-network-adapter performance monitoring with dedicated System Information panels and tray icons.
+  </Card>
+  <Card title="WindowExplorer" icon="window-restore">
+    Hierarchical browser for all top-level and child windows on the desktop. Identify window ownership, inspect window styles, and highlight the owning process.
+  </Card>
+  <Card title="OnlineChecks" icon="globe">
+    One-click VirusTotal analysis for process images and individual files. Supports both hash lookups and file uploads.
+  </Card>
+  <Card title="Updater" icon="arrow-up-to-line">
+    Automatic and manual update support. Checks the System Informer GitHub releases feed and guides the user through downloading and installing a newer build.
+  </Card>
+  <Card title="ExtendedServices" icon="gear">
+    Adds extra columns and property pages for services, including trigger information and service SID type.
+  </Card>
+</CardGroup>

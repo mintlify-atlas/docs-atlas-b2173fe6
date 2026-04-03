@@ -1,0 +1,103 @@
+---
+title: "System requirements"
+description: "System Informer runs on Windows 10 and later, requires no installation, and works with standard user or administrator privileges."
+---
+
+## Operating system
+
+System Informer requires **Windows 10 or higher**, either 32-bit or 64-bit.
+
+<Warning>
+  Always run the version of System Informer that matches your Windows architecture. Running the 32-bit (x86) build on 64-bit Windows will cause most features to malfunction. Check your system type in **Control Panel → System** if you are unsure.
+</Warning>
+
+| Architecture | Executable |
+|---|---|
+| 64-bit Windows (x64) | `SystemInformer.exe` from the x64 archive |
+| 32-bit Windows (x86) | `SystemInformer.exe` from the x86 archive |
+
+## No installation required
+
+System Informer is fully portable. It writes no files to `System32`, makes no registry modifications outside of optional settings, and leaves no traces after you delete the folder. You can run it directly from a USB drive, a network share, or any local directory.
+
+## User privileges
+
+System Informer runs under two privilege levels. The level you use determines which features are available.
+
+<Tabs>
+  <Tab title="Standard user">
+    As a standard (non-elevated) user, you can:
+
+    - View all running processes with CPU and memory usage
+    - See basic process properties (image path, command line, start time)
+    - Browse active network connections for most processes
+    - Inspect handles and modules for processes owned by your user account
+    - View and search Windows services (read-only)
+    - Use the PE file viewer and related tools
+
+    Actions requiring access to protected or system-owned processes — such as terminating a service host or reading the memory of an anti-cheat process — will be denied or will prompt for elevation.
+  </Tab>
+  <Tab title="Administrator">
+    Running as administrator (elevated) unlocks the full feature set:
+
+    - Terminate, suspend, or modify any process regardless of owner
+    - Inspect memory, handles, tokens, and modules for all processes including system and protected processes
+    - Access real-time disk I/O statistics (via the ExtendedTools plugin and ETW)
+    - Load and communicate with the KSystemInformer kernel driver
+    - Create, modify, start, stop, and delete Windows services
+    - Read network connections for system-level processes
+    - Use elevated "Run As" features to launch processes under other accounts
+
+    <Tip>
+      You can configure System Informer to request elevation automatically on startup via **Options → Advanced → Start as administrator**.
+    </Tip>
+  </Tab>
+</Tabs>
+
+## Kernel driver requirements
+
+System Informer includes an optional kernel driver, **KSystemInformer**, that provides capabilities beyond what user-mode APIs expose:
+
+- Tamper-resistant process protection and inspection
+- Detection of injected code and image coherency verification
+- Access to kernel objects and internal system state that user-mode cannot reach
+- Protection against exploitation of the System Informer process itself
+
+<Note>
+  The kernel driver requires administrator privileges to load. It is not required for basic use. See [Kernel driver](/dev/kernel-driver) for setup details, signing requirements, and security model.
+</Note>
+
+The driver enforces strict access controls: only processes verified by signature checks (signed by Winsider, Microsoft, or a recognized anti-malware vendor) are granted elevated driver access. Third-party plugins that are not signed will have restricted driver access.
+
+## Disk and network I/O statistics
+
+Real-time disk and network information in the ExtendedTools plugin is provided via the Windows Event Tracing for Windows (ETW) infrastructure. This requires:
+
+- Administrator privileges
+- Windows Vista or later (satisfied by the Windows 10 minimum)
+
+Without administrator rights, disk and network I/O columns in the process list will show no data.
+
+## No Visual C++ runtime dependency
+
+System Informer links against the Windows Native API (ntdll.dll) and standard system libraries rather than the Visual C++ redistributable. You do not need to install any additional runtimes before running System Informer.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Can I run System Informer on Windows 7 or 8?">
+    The current version requires Windows 10 or higher. Older builds of System Informer (when it was known as Process Hacker) supported Windows 7 and 8, but those versions are no longer maintained and do not include recent features or security improvements.
+  </Accordion>
+  <Accordion title="Do I need to uninstall a previous version before upgrading?">
+    No. Because System Informer requires no installation, you can simply replace the existing executable and plugin files with the newer versions. Your settings file is not affected.
+  </Accordion>
+  <Accordion title="Can I run System Informer on a domain-joined machine?">
+    Yes. System Informer works on domain-joined machines. If Group Policy restricts your ability to run unsigned executables or load kernel drivers, you may need to work with your administrator to allow the System Informer binaries. All official binaries are digitally signed.
+  </Accordion>
+  <Accordion title="Can I run multiple versions at the same time?">
+    Yes. Each instance of System Informer is self-contained in its own folder. By default, System Informer enforces single-instance behavior — launching a second copy will bring the existing window to the foreground. You can disable this in **Options → General → Allow only one instance** or pass `-newinstance` on the command line to force a new window.
+  </Accordion>
+  <Accordion title="Does System Informer send any data over the network?">
+    System Informer does not phone home or collect telemetry. Network activity from System Informer itself is limited to optional features you explicitly invoke: online reputation checks via the OnlineChecks plugin (e.g., VirusTotal lookups), DNS lookups for resolving addresses in the network view, and update checks via the Updater plugin. All of these can be disabled.
+  </Accordion>
+</AccordionGroup>

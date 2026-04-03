@@ -1,0 +1,145 @@
+---
+title: "Kernel driver (KSystemInformer)"
+description: "How KSystemInformer works, its security model, and how to set up a development environment with a custom signing key pair."
+---
+
+KSystemInformer is the kernel-mode driver that powers System Informer's deepest capabilities. It runs in ring 0 and provides functionality that cannot be achieved from user mode alone.
+
+The driver:
+
+- Optimizes retrieval of system information that would otherwise require many expensive user-mode calls
+- Enables broader inspection into processes, threads, handles, and memory across the system
+- Delivers real-time notification of system activity
+- Assists in detection and removal of malware that actively hides from user-mode tools
+
+## Security model
+
+Because the driver exposes privileged access to the system by design, access is strictly limited to verified callers. The driver enforces this through a combination of signing verification, privilege checks, and ongoing process state monitoring.
+
+**How it works:**
+
+- The driver tracks each client process that connects to it.
+- On connection, the client's binary is verified against a trusted public key embedded in the driver.
+- The driver continuously monitors for tampering. If the client process is modified or exploited after connecting, the driver detects this and denies further access.
+- Privilege checks are performed on each request. A client that doesn't meet the requirements for a given operation is denied.
+
+### Signed binary requirement
+
+Every binary that loads into System Informer — including plugins — must have a corresponding **`.sig` file** placed next to the binary. This `.sig` is produced by signing the binary with the key pair that is embedded in the driver at build time.
+
+Binaries signed by **Microsoft** or an **anti-malware vendor** are also accepted without a `.sig`.
+
+### Unsigned plugin behavior
+
+Third-party plugins and locally built plugins that have not been signed with a recognized key pair are supported but result in **restricted driver access** for the entire System Informer process while those plugins are loaded. This is an intentional mitigation to limit the impact of a compromised or malicious plugin exploiting driver access.
+
+<Note>
+  You can disable the image load denial setting in System Informer's advanced settings. The driver will still run, but any process with unsigned modules will receive restricted access rather than a denial. This is useful during development when you don't yet have a key pair configured.
+</Note>
+
+## Development setup
+
+To develop and test your own builds of System Informer components against the driver, you need to either:
+
+- Use a custom key pair that you generate and embed into your driver build, or
+- Disable the driver's verification entirely via debug and test signing mode
+
+### Enabling debug and test signing mode
+
+<Warning>
+  Enabling test signing disables Windows' enforcement of driver signature requirements system-wide. Only do this on a dedicated development machine or VM — never on a production system.
+</Warning>
+
+Disable Secure Boot in your firmware settings first (if applicable), then run the following from an elevated command prompt:
+
+```cmd
+bcdedit /debug on
+bcdedit /set testsigning on
+```
+
+Restart the machine for both settings to take effect. In this mode:
+
+- The client process can be attached to with a debugger without triggering tamper detection.
+- Test signing keys (`KphKeyTypeTest`) are accepted by the driver.
+
+### Creating a custom key pair
+
+Once test signing mode is active, you can generate your own key pair and embed it into your driver build so that your locally compiled binaries are accepted with full driver access.
+
+<Steps>
+  <Step title="Generate the key pair">
+    Run `CustomSignTool.exe` from the build output directory to create a private signing key and a public key:
+
+    ```cmd
+    tools\CustomSignTool\bin\Release64\CustomSignTool.exe createkeypair kph.key public.key
+    ```
+
+    This produces two files: `kph.key` (keep this private) and `public.key`.
+  </Step>
+
+  <Step title="Install the private key">
+    Copy `kph.key` into the signing tool's resources directory so the build process can find it:
+
+    ```cmd
+    copy kph.key tools\CustomSignTool\resources\kph.key
+    ```
+  </Step>
+
+  <Step title="Register the public key in the driver">
+    Open `KSystemInformer\verify.c` and add the bytes from `public.key` to the `KphpPublicKeys` array.
+
+    Choose the appropriate key type for your use case:
+
+    | Key type | Requires test signing |
+    |---|---|
+    | `KphKeyTypeProd` | No |
+    | `KphKeyTypeTest` | Yes |
+
+    Use `KphKeyTypeTest` for local development. Use `KphKeyTypeProd` only if you are distributing a signed driver.
+  </Step>
+
+  <Step title="Regenerate dynamic data">
+    The driver uses its embedded public key to validate dynamic data at load time. After changing the key, regenerate this data:
+
+    ```cmd
+    tools\CustomBuildTool\bin\Release\amd64\CustomBuildTool.exe -dyndata
+    ```
+
+    Skipping this step will cause the driver to fail to load or connect.
+  </Step>
+
+  <Step title="Rebuild kernel and user components">
+    Rebuild both the kernel driver and the user-mode components so that all binaries are signed with the new key:
+
+    ```cmd
+    build\build_release.cmd
+    ```
+
+    After the build completes, a `.sig` file will be generated next to each output binary.
+  </Step>
+</Steps>
+
+<Warning>
+  It is critical to regenerate dynamic data and rebuild all components after creating and placing a new key pair. The driver validates the dynamic data and user-mode binaries using the embedded public key. If any component is out of sync with the key, the driver will refuse to load or the client will fail to connect.
+</Warning>
+
+## `.sig` files
+
+Every binary that is intended to interact with the driver at full access must have a `.sig` file in the same directory. This applies to:
+
+- `SystemInformer.exe`
+- All plugins built through the regular build process
+- Any custom tools that connect to the driver
+
+When you build with a custom key pair in place, `.sig` files are generated automatically as part of the build. Plugins not built through the standard build process must be signed separately using `CustomSignTool.exe`.
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="Building from source" icon="hammer" href="/dev/building">
+    Set up your build environment and compile System Informer.
+  </Card>
+  <Card title="Plugin development" icon="puzzle" href="/dev/plugin-overview">
+    Write and load your own plugins.
+  </Card>
+</CardGroup>

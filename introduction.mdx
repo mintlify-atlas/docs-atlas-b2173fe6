@@ -1,0 +1,66 @@
+---
+title: "Introduction"
+description: "System Informer is a free, powerful, multi-purpose tool for monitoring system resources, debugging software, and detecting malware on Windows."
+---
+
+System Informer gives you deep, real-time visibility into every process, service, network connection, and kernel object on your Windows machine. Whether you're hunting for a resource hog, analyzing suspicious activity, debugging a crash, or extending the tool with your own plugins, System Informer covers every layer of the Windows stack — from Win32 down to the Native API.
+
+## What System Informer does
+
+System Informer is built around four core use cases:
+
+- **System monitoring** — Real-time CPU, memory, disk, and network graphs for every process and the system as a whole, with color-coded highlighting to surface unusual activity instantly.
+- **Malware detection** — Identify injected code, tampered images, hidden processes, and suspicious handles. The optional kernel driver (KSystemInformer) provides tamper-resistant access that rootkits cannot easily evade.
+- **Software debugging** — Inspect thread call stacks with full kernel-mode, WOW64, and .NET support. View loaded modules, heap allocations, environment variables, token privileges, and more — all without attaching a separate debugger.
+- **Plugin development** — Extend System Informer with your own plugins using the phlib SDK and the full set of Windows Native API headers (phnt). Plugins can add UI panels, menu items, process tree columns, and notification callbacks.
+
+## How it compares to Task Manager
+
+Windows Task Manager shows running processes and basic resource usage. System Informer goes further in almost every dimension:
+
+| Capability | Task Manager | System Informer |
+|---|---|---|
+| Per-process CPU, memory, I/O graphs | Basic | Detailed, real-time |
+| Service management | View only | Create, edit, start, stop, delete |
+| Network connections per process | No | Yes, with bandwidth |
+| Thread and call stack inspection | No | Yes, with symbols |
+| Handle and kernel object browser | No | Yes |
+| Memory region browser and editor | No | Yes |
+| PE file and signature inspection | No | Yes |
+| Malware detection and image verification | No | Yes (with kernel driver) |
+| Plugin extensibility | No | Yes, full SDK |
+
+<Note>
+  If you hold **Shift** while launching System Informer, it will open Windows Task Manager instead. This is useful if System Informer is configured as the default Task Manager replacement.
+</Note>
+
+## Key capabilities
+
+<CardGroup cols={2}>
+  <Card title="Process monitoring" icon="gauge-high" href="/features/processes">
+    Inspect every running process — threads, modules, memory maps, handles, tokens, environment variables, and real-time resource graphs.
+  </Card>
+  <Card title="Service management" icon="gear" href="/features/services">
+    Go beyond services.msc: create, configure, start, stop, pause, and delete Windows services.
+  </Card>
+  <Card title="Network monitor" icon="network-wired" href="/features/network">
+    See all active TCP and UDP connections attributed to specific processes, with real-time bandwidth usage.
+  </Card>
+  <Card title="Memory analysis" icon="memory" href="/features/memory">
+    Browse virtual memory regions, search for strings or byte patterns, and edit process memory live.
+  </Card>
+  <Card title="Plugin SDK" icon="puzzle-piece" href="/dev/plugin-overview">
+    Build plugins with full access to phlib, the Windows Native API, and all System Informer UI extension points.
+  </Card>
+  <Card title="Kernel driver" icon="microchip" href="/dev/kernel-driver">
+    KSystemInformer provides deep, tamper-resistant system access for malware detection and advanced inspection.
+  </Card>
+</CardGroup>
+
+## Open source and free
+
+System Informer is 100% free and open source under the [MIT License](https://opensource.org/licenses/MIT). The source code is maintained by Winsider Seminars & Solutions, Inc. and is available on [GitHub](https://github.com/winsiderss/systeminformer). Contributions, bug reports, and feature requests are welcome through the GitHub issue tracker.
+
+<Tip>
+  System Informer requires no installation. Download the archive, extract it anywhere, and run `SystemInformer.exe`. Settings are saved to your AppData folder by default, or locally next to the executable for portable use.
+</Tip>

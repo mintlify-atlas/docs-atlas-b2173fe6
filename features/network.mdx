@@ -1,0 +1,136 @@
+---
+title: "Network connections"
+description: "See every active TCP and UDP endpoint on your system, attributed to the process that owns it, with real-time state tracking."
+---
+
+The **Network** tab shows all active TCP connections and listening UDP endpoints on the local machine. Each entry is automatically attributed to the owning process so you can see at a glance which application is communicating with which remote host.
+
+## Network list columns
+
+The default visible columns are:
+
+| Column | Description |
+|---|---|
+| **Name** | Image name of the process that owns the connection, with its icon |
+| **PID** | Process ID |
+| **Local address** | Local IP address (IPv4 or IPv6) |
+| **Local port** | Local port number |
+| **Remote address** | Remote IP address, or empty for listening endpoints |
+| **Remote port** | Remote port number |
+| **Protocol** | `TCP`, `TCP6`, `UDP`, or `UDP6` |
+| **State** | TCP connection state (see below) or blank for UDP |
+| **Owner** | Service name if the connection belongs to a service hosted in a shared process |
+
+Optional columns you can enable:
+
+- **Time stamp** — When the connection was first observed by System Informer
+- **Local hostname** — Reverse-DNS name for the local address (requires hostname resolution to be enabled)
+- **Remote hostname** — Reverse-DNS name for the remote address
+- **Timeline** — Graphical bar showing how long the connection has existed
+- **Hyper-V service** — Hyper-V socket service identifier for VM communications
+
+## TCP connection states
+
+System Informer shows the full set of TCP states reported by the Windows IP Helper API:
+
+| State | Meaning |
+|---|---|
+| `Established` | Active two-way connection |
+| `Listen` | Waiting for an incoming connection |
+| `Time Wait` | Closing, waiting for delayed packets |
+| `Close Wait` | Remote end has closed; local end is still open |
+| `Syn Sent` | Local SYN sent; waiting for remote SYN-ACK |
+| `Syn Received` | SYN received; SYN-ACK sent |
+| `Fin Wait 1` | Local side initiated close |
+| `Fin Wait 2` | Local FIN acknowledged; waiting for remote FIN |
+| `Last Ack` | Waiting for acknowledgment of remote close |
+| `Closing` | Both sides simultaneously closed |
+| `Delete TCB` | TCP control block being deleted |
+
+## Color highlighting
+
+New and removed connections flash with the global new/removed colors (green and red by default), the same way processes and services do. There is no persistent color coding specific to network connections, but you can apply column filters to visually isolate traffic by protocol, state, or process.
+
+<Note>
+  The **Packed** process color (yellow) appears on network rows whose owning process binary is packed or obfuscated. This is the same coherency-based highlighting used on the Processes tab.
+</Note>
+
+## Context-menu actions
+
+Right-click a connection to access:
+
+<CardGroup cols={2}>
+  <Card title="Close connection" icon="xmark">
+    Terminates the selected TCP connection by calling the Windows `SetTcpEntry` API. Works only for TCP connections in the `Established` state. Requires administrator privileges.
+  </Card>
+  <Card title="Go to process" icon="arrow-right">
+    Switches to the Processes tab and selects the owning process.
+  </Card>
+  <Card title="Copy" icon="copy">
+    Copies the selected rows to the clipboard as tab-separated text. Use **Copy cell** to copy a single column value.
+  </Card>
+  <Card title="Whois" icon="magnifying-glass">
+    Looks up WHOIS information for the remote IP address. Requires the **NetworkTools** plugin (see below).
+  </Card>
+  <Card title="Traceroute" icon="route">
+    Runs a traceroute to the remote address. Requires the **NetworkTools** plugin.
+  </Card>
+  <Card title="Ping" icon="wifi">
+    Sends ICMP echo requests to the remote address. Requires the **NetworkTools** plugin.
+  </Card>
+</CardGroup>
+
+## Filtering connections
+
+<Steps>
+  <Step title="Filter by process">
+    Type a process name or PID into the search box at the top-right of the main window. The network list narrows to connections owned by matching processes.
+  </Step>
+  <Step title="Filter by state">
+    Click the column header for **State**, then use the search box to type a state name such as `Established` or `Listen`.
+  </Step>
+  <Step title="Filter by address or port">
+    Type a partial IP address or port number into the search box. The filter matches against both local and remote address and port columns.
+  </Step>
+  <Step title="Show connections for one process">
+    Open a process's properties dialog (**double-click** on the Processes tab) and look for the network connections embedded in the properties. Some plugins, such as **ExtendedTools**, surface per-process network graphs there.
+  </Step>
+</Steps>
+
+## Hostname resolution
+
+When enabled, System Informer resolves IP addresses to hostnames in the background using the system's DNS resolver. Resolved names appear in the **Local hostname** and **Remote hostname** columns.
+
+<Steps>
+  <Step title="Enable hostname columns">
+    Right-click the column header row in the Network tab and enable **Local hostname** and/or **Remote hostname**.
+  </Step>
+  <Step title="Toggle resolution">
+    Go to **Options → Network** and check **Resolve host names**. Resolution runs asynchronously and does not block the UI.
+  </Step>
+</Steps>
+
+<Tip>
+  Hostname resolution adds DNS queries for every unique remote IP address. On machines with many simultaneous connections this can generate significant DNS traffic. Disable it if you only need raw IP addresses.
+</Tip>
+
+## NetworkTools plugin
+
+The **NetworkTools** plugin extends the network context menu with additional lookup and diagnostic tools.
+
+<CardGroup cols={2}>
+  <Card title="WHOIS" icon="globe">
+    Queries WHOIS information for the remote IP address and displays the registrant, network block, and abuse contacts.
+  </Card>
+  <Card title="Traceroute" icon="route">
+    Sends UDP or ICMP probes with increasing TTL values to map the network path to the remote host, displayed hop-by-hop.
+  </Card>
+  <Card title="Ping" icon="wifi">
+    Sends ICMP echo requests and shows round-trip times and packet loss.
+  </Card>
+  <Card title="GeoIP lookup" icon="map-pin">
+    Shows an estimated geographic location for the remote IP address using a local database.
+  </Card>
+</CardGroup>
+
+To enable the plugin, go to **Options → Plugins**, find **NetworkTools**, and enable it. No restart is required.

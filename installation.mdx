@@ -1,0 +1,147 @@
+---
+title: "Installation"
+description: "Download and set up System Informer. No installer required — extract and run on any Windows 10 or later machine."
+---
+
+System Informer is portable — there is no setup wizard or system-wide installation. You extract the archive and run `SystemInformer.exe` directly. This makes it easy to carry on a USB drive, deploy to servers, or run multiple versions side by side.
+
+## Download System Informer
+
+<Steps>
+  <Step title="Visit the downloads page">
+    Go to [systeminformer.com/downloads](https://systeminformer.com/downloads) and select the latest stable release. Pre-built binaries are also published in the [si-builds GitHub repository](https://github.com/winsiderss/si-builds/releases).
+  </Step>
+  <Step title="Choose the right architecture">
+    Download the archive that matches your Windows installation:
+
+    - **x64** — 64-bit Windows (most modern systems)
+    - **x86** — 32-bit Windows
+
+    <Warning>
+      You cannot run the 32-bit (x86) version of System Informer on a 64-bit system and expect it to work correctly. Most features will not function as expected. Always run the version that matches your OS architecture.
+    </Warning>
+  </Step>
+  <Step title="Extract the archive">
+    Extract the downloaded `.zip` archive to any folder — for example, `C:\Tools\SystemInformer\`. No files are written outside this folder unless you choose the default AppData settings location.
+  </Step>
+  <Step title="Run SystemInformer.exe">
+    Double-click `SystemInformer.exe` to launch. For full functionality, run it as administrator (see [administrator privileges](#administrator-privileges) below).
+  </Step>
+</Steps>
+
+## Portable and USB setup
+
+If you run System Informer from a USB drive or a shared folder, you can store settings in the same directory as the executable instead of in your user profile.
+
+<Steps>
+  <Step title="Locate the System Informer folder">
+    Open the folder containing `SystemInformer.exe` in Windows Explorer.
+  </Step>
+  <Step title="Show file extensions">
+    In Windows Explorer, go to **Tools → Folder options → View** and make sure **Hide extensions for known file types** is unticked.
+  </Step>
+  <Step title="Create the settings file">
+    Right-click in the folder and choose **New → Text Document**. Rename the new file to exactly:
+
+    ```
+    SystemInformer.exe.settings.json
+    ```
+
+    Make sure to delete the `.txt` extension when renaming. The file must be empty — System Informer will populate it on first run.
+  </Step>
+</Steps>
+
+When this file is present in the same directory as `SystemInformer.exe`, System Informer automatically uses it for settings instead of the default AppData location. This makes your entire setup self-contained and portable.
+
+<Note>
+  The portable settings file must be named `SystemInformer.exe.settings.json`. The legacy `.settings.xml` format is also detected for backward compatibility, but new installations should use the `.json` variant.
+</Note>
+
+## Settings file location
+
+By default, settings are stored at:
+
+```
+%APPDATA%\SystemInformer\settings.json
+```
+
+You can also specify a custom settings file path on the command line:
+
+```bat
+SystemInformer.exe -settings "D:\MyConfig\settings.json"
+```
+
+## Administrator privileges
+
+<Tabs>
+  <Tab title="Why they're needed">
+    Many of System Informer's capabilities require administrator rights to access protected Windows kernel objects and process information:
+
+    - Viewing and terminating processes owned by other users or system services
+    - Inspecting process memory, handles, and tokens for protected processes
+    - Accessing real-time disk I/O information (provided by the ExtendedTools plugin)
+    - Loading and using the KSystemInformer kernel driver
+    - Managing Windows services (create, modify, delete)
+    - Reading network traffic attributed to system-level processes
+
+    Standard user mode still provides useful process and network visibility, but privileged operations will either be unavailable or prompt for elevation.
+  </Tab>
+  <Tab title="How to run as administrator">
+    **One-time elevation:**
+
+    Right-click `SystemInformer.exe` and choose **Run as administrator**.
+
+    **Always run as administrator:**
+
+    1. Right-click `SystemInformer.exe` and choose **Properties**.
+    2. Go to the **Compatibility** tab.
+    3. Check **Run this program as an administrator**.
+    4. Click **OK**.
+
+    Alternatively, open **Options** inside System Informer and enable **Start as administrator** to have System Informer request elevation automatically on each launch.
+  </Tab>
+</Tabs>
+
+<Note>
+  System Informer will prompt for elevation automatically when you attempt an action that requires administrator rights, such as terminating a protected process or starting a service. You do not need to re-launch as administrator for every privileged action.
+</Note>
+
+## Plugin installation
+
+System Informer ships with several bundled plugins in the `plugins\` subdirectory. These are loaded automatically when plugins are enabled.
+
+To install a third-party plugin:
+
+<Steps>
+  <Step title="Locate the plugins folder">
+    Find the `plugins\` folder in the same directory as `SystemInformer.exe`. Create it if it does not exist.
+  </Step>
+  <Step title="Copy the plugin files">
+    Copy the plugin `.dll` file (and any accompanying `.sig` signature file) into the `plugins\` folder.
+
+    <Warning>
+      Only load plugins from sources you trust. Plugins run inside the System Informer process and have full access to its capabilities. Plugins built outside the official build process and not signed by an anti-malware vendor will have restricted access to the kernel driver.
+    </Warning>
+  </Step>
+  <Step title="Enable the plugin">
+    Launch System Informer and go to **Options → Plugins** to enable and configure the new plugin. Restart System Informer if prompted.
+  </Step>
+</Steps>
+
+## Bundled plugins
+
+The following plugins are included with System Informer:
+
+| Plugin | Description |
+|---|---|
+| ExtendedTools | Disk and network I/O statistics via ETW (requires administrator) |
+| DotNetTools | .NET process and CLR inspection |
+| HardwareDevices | GPU and hardware sensor monitoring |
+| NetworkTools | Traceroute, Whois, and network graph features |
+| ExtendedServices | Additional service management capabilities |
+| ExtendedNotifications | Email and sound notifications for process and service events |
+| OnlineChecks | VirusTotal and other online file reputation checks |
+| ToolStatus | Search bar and toolbar status indicators |
+| UserNotes | Attach personal notes and custom icons to processes |
+| WindowExplorer | Enumerate and inspect windows on the desktop |
+| Updater | In-app update checker |

@@ -1,0 +1,191 @@
+---
+title: "Process monitoring"
+description: "Real-time process list with color-coded highlighting, per-process graphs, detailed properties, thread inspection, and context-menu actions."
+---
+
+The **Processes** tab is the main view of System Informer. It shows every process running on your system — including the System Idle Process, DPCs, and Interrupts — updated on a configurable timer. Processes are displayed in a tree that reflects their parent–child relationships, so you can see at a glance which process spawned which.
+
+## Process list columns
+
+System Informer shows a rich set of columns. The default visible columns are:
+
+| Column | Description |
+|---|---|
+| **Name** | Process image name with its icon |
+| **PID** | Numeric process identifier |
+| **CPU** | Real-time CPU usage as a percentage |
+| **I/O total rate** | Combined read + write + other I/O bytes per second |
+| **Private bytes** | Amount of private committed memory |
+| **User name** | Account the process runs under |
+| **Description** | File description from the process image's version info |
+
+Right-click any column header to show or hide additional columns. Dozens of optional columns are available, including:
+
+- **Company name**, **Version**, **File name**, **Command line**
+- **Working set**, **Peak private bytes**, **Paged pool**, **Non-paged pool**
+- **Threads**, **Handles**, **GDI handles**, **USER handles**
+- **Base priority**, **I/O priority**, **Page priority**
+- **Integrity**, **Elevation**, **Verification status**, **Verified signer**
+- **DEP**, **ASLR**, **CF Guard**, **CET** (security mitigations)
+- **Architecture**, **Bits** (32-bit vs. 64-bit)
+- **Start time**, **Relative start time**, **Timeline** (graphical bar)
+- **CPU history**, **Private bytes history**, **I/O history** (miniature sparkline graphs)
+- **Image coherency** (detects in-memory patching)
+- **Mitigation policies**, **Protection**, **Critical**
+- **Services** (services hosted in the process)
+- **Package name**, **App ID** (UWP apps)
+
+## Color coding
+
+System Informer highlights processes using configurable background colors. Colors are applied in priority order — the first matching rule wins.
+
+<Tabs>
+  <Tab title="Transition colors">
+    | Color | Meaning |
+    |---|---|
+    | Green (default) | Newly appeared process |
+    | Red (default) | Process that recently exited |
+  </Tab>
+  <Tab title="State colors">
+    | Color | Meaning |
+    |---|---|
+    | Pink | Process is being debugged |
+    | Gray | Process is fully suspended or frozen |
+    | Light gray | Process is partially suspended |
+    | Green | Process is in efficiency mode (power throttling) |
+    | Dark gray | Background-priority process |
+    | Red | Low image coherency (possible in-memory patch) |
+    | Yellow | Packed executable (compressed or obfuscated) |
+    | Blue | Protected process (PPL or full protection) |
+    | Purple | Handle-filtered process |
+    | Orange | Elevated (full-token) process |
+    | Cyan | UIAccess process |
+    | Light green | Pico / subsystem process |
+    | Teal | Immersive / UWP process |
+    | Dark teal | .NET process |
+    | Light purple | 32-bit (WOW64) process |
+    | Yellow-green | Process inside a job object |
+    | Dark blue | System process |
+    | Light blue | Your own processes (same account) |
+    | Light orange | Service host process |
+  </Tab>
+</Tabs>
+
+You can customize all colors in **Options → Highlighting**.
+
+## Context-menu actions
+
+Right-click a process to access:
+
+<CardGroup cols={2}>
+  <Card title="Terminate / Terminate tree" icon="xmark">
+    Ends the process. "Terminate tree" also terminates all descendant processes.
+  </Card>
+  <Card title="Suspend / Resume" icon="pause">
+    Freezes or unfreezes all threads in the process (or the whole process tree).
+  </Card>
+  <Card title="Debug" icon="bug">
+    Attaches a debugger. System Informer uses the default debugger configured in the registry (`AeDebug`).
+  </Card>
+  <Card title="Create dump file" icon="floppy-disk">
+    Writes a minidump or full dump of the process for offline analysis. For kernel processes, creates a live kernel dump.
+  </Card>
+  <Card title="Affinity" icon="microchip">
+    Sets which CPU cores the process is allowed to run on.
+  </Card>
+  <Card title="Priority" icon="arrow-up-9-1">
+    Changes the base scheduling priority class: Idle, Below Normal, Normal, Above Normal, High, or Real-time.
+  </Card>
+  <Card title="Virtualization" icon="box">
+    Toggles UAC file/registry virtualization for the process token.
+  </Card>
+  <Card title="Properties" icon="circle-info">
+    Opens the full process properties dialog.
+  </Card>
+</CardGroup>
+
+## Process properties dialog
+
+Double-click any process (or press **Enter**) to open its properties. The dialog is tabbed and updates in real time.
+
+<Tabs>
+  <Tab title="General">
+    Shows the image file path, command line, current directory, parent process, start time, PID, session ID, DEP/ASLR/CFG status, protection level (PPL signer and type), integrity level, and digital signature verification result.
+  </Tab>
+  <Tab title="Statistics">
+    CPU time (kernel and user), context switches, I/O counters (reads, writes, other — both count and bytes), page faults, and a summary of handle and GDI object counts.
+  </Tab>
+  <Tab title="Performance">
+    Live graphs for CPU usage (kernel/user split), private bytes, and I/O rate, drawn with the same colors used in the system information window.
+  </Tab>
+  <Tab title="Threads">
+    A live list of every thread in the process showing thread ID, CPU usage, cycle delta, state, base priority, page priority, and start address (resolved to a symbol if available). Right-click a thread to terminate, suspend, resume, or change its priority, affinity, or I/O priority. Double-click a thread to view its call stack.
+  </Tab>
+  <Tab title="Modules">
+    All DLLs and mapped files loaded into the process, with base address, size, load count, file description, version, and digital signature status. New and removed modules are highlighted.
+  </Tab>
+  <Tab title="Memory">
+    A virtual memory map of the process address space. See [Memory analysis](/features/memory) for details.
+  </Tab>
+  <Tab title="Handles">
+    All open kernel handles for the process. See [Handles and objects](/features/handles) for details.
+  </Tab>
+  <Tab title="Environment">
+    All environment variables for the process, editable in place.
+  </Tab>
+  <Tab title="Token">
+    The process access token: user SID, groups, privileges (with enable/disable toggles), logon session, and token elevation type.
+  </Tab>
+  <Tab title="Job">
+    Shown when the process is inside a job object. Displays job limits (CPU, memory, UI) and lists all processes in the same job.
+  </Tab>
+  <Tab title="Services">
+    Lists Windows services hosted inside the process (common for `svchost.exe` and driver processes).
+  </Tab>
+  <Tab title="WMI">
+    Queries WMI for additional process metadata: command line, working set size, owner, and more.
+  </Tab>
+</Tabs>
+
+<Note>
+  Plugins can add additional tabs to the properties dialog. For example, the **.NET Tools** plugin adds a `.NET assemblies` tab, and the **ExtendedTools** plugin adds GPU and disk information.
+</Note>
+
+## Thread call stacks
+
+From the **Threads** tab, double-click any thread to open its call stack viewer.
+
+<Steps>
+  <Step title="Open the thread's call stack">
+    Double-click a thread row in the Threads tab. System Informer suspends the thread briefly, walks the stack, and then resumes it.
+  </Step>
+  <Step title="Load symbols">
+    Symbol resolution happens automatically using `dbghelp.dll`. Configure your symbol path in **Options → Symbols** (supports Microsoft symbol server, local paths, and UNC paths).
+  </Step>
+  <Step title="Inspect frames">
+    Each frame shows the module, function name, and source line (if PDB symbols are available). Kernel-mode frames appear in a different color when the kernel driver is loaded.
+  </Step>
+  <Step title="Copy or save">
+    Right-click to copy selected frames or the entire stack to the clipboard.
+  </Step>
+</Steps>
+
+<Tip>
+  Call stacks work for 32-bit (WOW64) processes, 64-bit processes, and .NET managed threads. For .NET threads, the .NET Tools plugin provides managed-to-native frame stitching.
+</Tip>
+
+## Searching and filtering
+
+Use the search box at the top-right of the main window to filter the process list. The filter matches against process name, PID, user name, description, company name, command line, and any other visible text column.
+
+<AccordionGroup>
+  <Accordion title="Search by name or PID">
+    Type a partial process name (for example `chrome`) or a numeric PID to narrow the list instantly. The tree expands automatically to show matching children.
+  </Accordion>
+  <Accordion title="Advanced column filters">
+    Click the funnel icon next to the search box to add column-specific filters such as "CPU greater than 10%" or "user name equals SYSTEM". Multiple filters are combined with AND logic.
+  </Accordion>
+  <Accordion title="Highlight instead of hide">
+    Right-click the filter bar and select **Highlight** mode to keep all processes visible but dim those that do not match, making the matching rows stand out.
+  </Accordion>
+</AccordionGroup>

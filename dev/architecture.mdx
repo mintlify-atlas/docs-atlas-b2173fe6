@@ -1,0 +1,171 @@
+---
+title: "Architecture overview"
+description: "A high-level map of how System Informer's major components fit together — from the kernel driver through phlib to the UI and plugin layer."
+---
+
+System Informer is not a monolithic application. It is assembled from several discrete libraries and binaries that each own a well-defined responsibility. Understanding the boundaries between them makes it much easier to navigate the codebase, write a plugin, or extend one of the data collection subsystems.
+
+## Component map
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    User space                                │
+│                                                              │
+│  ┌──────────────┐    ┌────────────┐    ┌──────────────────┐ │
+│  │ peview.exe   │    │  phsvc     │    │    Plugins       │ │
+│  │ (PE viewer)  │    │ (service)  │    │  (*.dll in       │ │
+│  └──────┬───────┘    └─────┬──────┘    │   plugins\)      │ │
+│         │                  │           └────────┬─────────┘ │
+│         │        ┌─────────▼──────────────────▼──────────┐  │
+│         └───────►│         SystemInformer.exe             │  │
+│                  │         (main application UI)          │  │
+│                  └────────────────┬───────────────────────┘  │
+│                                   │                           │
+│                  ┌────────────────▼───────────────────────┐  │
+│                  │              phlib.dll                  │  │
+│                  │  (data structures, Native API wrappers, │  │
+│                  │   UI controls, provider threads)        │  │
+│                  └──────────┬─────────────┬───────────────┘  │
+│                             │             │                   │
+│                  ┌──────────▼──┐  ┌───────▼─────────────┐   │
+│                  │  phnt       │  │  kphlib (user-mode)  │   │
+│                  │  (headers)  │  │  (driver comms)      │   │
+│                  └─────────────┘  └──────────┬──────────┘   │
+│                                              │                │
+└──────────────────────────────────────────────┼───────────────┘
+                                               │ IOCTL / ALPC
+┌──────────────────────────────────────────────▼───────────────┐
+│                    Kernel space                               │
+│                                                              │
+│              KSystemInformer.sys (kernel driver)             │
+│              Process, thread, image-load callbacks           │
+│              Handle pre/post filtering                        │
+│              Privileged query / set operations               │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Components
+
+<AccordionGroup>
+  <Accordion title="SystemInformer.exe — main application">
+    The main GUI process. It owns the process, service, and network tree views, the system information panels, the options dialog, and the plugin host. It calls into `phlib` for all data collection and into `kphlib` when it needs capabilities that require the kernel driver.
+
+    The application does not call `Nt*` functions directly — it goes through `phlib` wrappers and the provider system so that data collection is decoupled from the UI.
+  </Accordion>
+
+  <Accordion title="phlib — core library">
+    The shared library used by `SystemInformer.exe`, all plugins, `peview`, and `phsvc`. It provides reference-counted objects, strings, collections, synchronization primitives, a GUI control library (`PhTreeNew`, `PhGraph`), and thin wrappers over the Native API. See [phlib — core library](/dev/phlib) for the full reference.
+  </Accordion>
+
+  <Accordion title="KSystemInformer.sys — kernel driver">
+    A signed kernel driver (also known as KSI) that enables operations not available to user-mode code. The driver registers process-creation, thread-creation, image-load, and handle-operation callbacks. It exposes a privileged IOCTL/ALPC interface to user-mode clients and enforces a process-state security model (`KPH_PROCESS_STATE`) before granting elevated access.
+
+    The driver is optional — System Informer functions without it, but some capabilities (forced handle close, reading protected-process memory, kernel stack walks) require it.
+  </Accordion>
+
+  <Accordion title="kphlib — user-mode driver client">
+    A user-mode library that manages the communication channel between `SystemInformer.exe` and `KSystemInformer.sys`. It handles connection setup, message serialization, and the bidirectional message protocol. Inbound kernel messages (`KphMsgProcessCreate`, `KphMsgImageLoad`, `KphMsgHandlePreCreateProcess`, and dozens of file-operation pre/post messages) are dispatched here before reaching the application layer.
+
+    `kphlib` can compile for both user mode and kernel mode (`kphlibbase.h` conditionally includes either `phnt.h` or `ntifs.h`).
+  </Accordion>
+
+  <Accordion title="phnt — Native API headers">
+    A header-only collection of Windows Native API definitions maintained since 2009. `phnt` is the foundation that both `phlib` and `kphlib` build on. See [phnt — Native API headers](/dev/phnt) for usage details.
+  </Accordion>
+
+  <Accordion title="Plugins — DLL extensions">
+    Plugins are ordinary Windows DLLs placed in the `plugins\` directory. They are loaded by `SystemInformer.exe` at startup and register callbacks through the `phlib` plugin API. A plugin can add columns to tree views, inject menu items, contribute property pages, and draw its own graph panels — all without modifying the host executable. See [Plugin overview](/dev/plugin-overview) for the extension-point reference.
+  </Accordion>
+
+  <Accordion title="phsvc — privileged service">
+    A small out-of-process server that handles operations requiring administrative privileges when the main process is running at a lower integrity level. `SystemInformer.exe` connects to it over a local ALPC port. Because it runs as a separate process, privilege escalation prompts can be scoped precisely to the operations that actually need them.
+  </Accordion>
+
+  <Accordion title="peview — PE file viewer">
+    A standalone executable for inspecting PE images. It reuses `phlib` for its UI (tree views, graphs) and for parsing PE structures but does not load plugins or connect to the kernel driver.
+  </Accordion>
+</AccordionGroup>
+
+## Provider system
+
+Data collection for processes, services, and network connections is driven by the `PH_PROVIDER_THREAD` mechanism defined in `phlib/include/provider.h`.
+
+A `PH_PROVIDER_THREAD` owns a background thread that fires on a timer. You register a callback function and an optional context object with `PhRegisterProvider`, and the thread calls your function on every tick. The tick interval is set with `PhInitializeProviderThread` and can be changed at runtime with `PhSetIntervalProviderThread`.
+
+```c
+// Declare and start a provider thread that fires every 1000 ms
+PH_PROVIDER_THREAD providerThread;
+PhInitializeProviderThread(&providerThread, 1000);
+PhStartProviderThread(&providerThread);
+
+// Register a callback — called on every tick while Enabled is TRUE
+PH_PROVIDER_REGISTRATION registration;
+PhRegisterProvider(&providerThread, MyProviderCallback, contextObject, &registration);
+PhSetEnabledProvider(&registration, TRUE);
+```
+
+To force an immediate update — for example, when the user opens a process properties dialog — call `PhBoostProvider`. The provider thread wakes early and runs the registered function before returning to its normal interval.
+
+## Plugin loading and isolation
+
+At startup, `SystemInformer.exe` enumerates `*.dll` files in the `plugins\` subdirectory and calls `LoadLibrary` on each one. The DLL's `DllMain` (or a dedicated export) calls into `phlib` to register the plugin name and version, then subscribes to the callbacks it needs.
+
+Plugins share the same process address space as the host, so they have full access to `phlib` exports and to any data structures the host has published. There is no sandboxing between plugins, but the kernel driver enforces a process-state check (`KPH_PROCESS_STATE`) — plugins that are not signed by a trusted publisher receive restricted driver access.
+
+## Communication with the kernel driver
+
+User-mode to kernel communication goes through `kphlib`. The message protocol is defined by `KPH_MESSAGE_ID` (in `kphlib/include/kphmsg.h`). Messages in the `PH → KPH` direction are requests — for example:
+
+| Message | Direction | Purpose |
+|---|---|---|
+| `KphMsgOpenProcess` | PH → KPH | Open a process handle with elevated access |
+| `KphMsgReadVirtualMemory` | PH → KPH | Read memory from a protected process |
+| `KphMsgTerminateProcess` | PH → KPH | Terminate a protected process |
+| `KphMsgQueryInformationProcess` | PH → KPH | Query process information the normal APIs deny |
+| `KphMsgEnumerateProcessHandles` | PH → KPH | Enumerate all handles in a process |
+
+Messages in the `KPH → PH` direction are notifications pushed from kernel callbacks:
+
+| Message | Direction | Purpose |
+|---|---|---|
+| `KphMsgProcessCreate` | KPH → PH | New process created |
+| `KphMsgImageLoad` | KPH → PH | Image (DLL/EXE) loaded into a process |
+| `KphMsgHandlePreCreateProcess` | KPH → PH | Handle to a process about to be created |
+| `KphMsgFilePreCreate` / `KphMsgFilePostCreate` | KPH ↔ PH | File create pre/post filter |
+
+## Data flow
+
+```
+KSystemInformer.sys
+  │  kernel callbacks fire (process create, image load, …)
+  │  message serialized by kphlib kernel-mode component
+  ▼
+kphlib (user-mode)
+  │  deserializes inbound KPH_MESSAGE
+  │  dispatches to registered handler in SystemInformer.exe
+  ▼
+phlib provider thread
+  │  PhBoostProvider() wakes the relevant provider early
+  │  provider callback queries NtQuerySystemInformation / phlib wrappers
+  ▼
+SystemInformer.exe UI thread
+  │  provider posts a WM_PH_PROVIDER_EVENT to the main window
+  │  tree view node updated, graph data appended to PH_CIRCULAR_BUFFER
+  ▼
+PhTreeNew / PhGraph controls redraw
+```
+
+<CardGroup cols={2}>
+  <Card title="phlib — core library" icon="code" href="/dev/phlib">
+    Reference counting, strings, collections, synchronization, and GUI controls.
+  </Card>
+  <Card title="phnt — Native API headers" icon="file-code" href="/dev/phnt">
+    The complete Windows Native API header collection used throughout phlib and kphlib.
+  </Card>
+  <Card title="Plugin overview" icon="puzzle-piece" href="/dev/plugin-overview">
+    How plugins are loaded, what extension points they can use, and which plugins ship in the box.
+  </Card>
+  <Card title="Building from source" icon="hammer" href="/dev/building">
+    How to compile System Informer, phlib, and the kernel driver from the repository.
+  </Card>
+</CardGroup>

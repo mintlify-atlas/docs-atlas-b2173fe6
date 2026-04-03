@@ -1,0 +1,119 @@
+---
+title: "Contributing"
+description: "How to contribute to System Informer through bug reports, feature requests, and pull requests."
+---
+
+System Informer is an open-source project and welcomes contributions from the community. This page explains how to report issues, propose features, and submit code changes.
+
+<Note>
+  Before contributing code, build the project locally and verify your changes compile and run correctly. See [Building from source](/dev/building) for setup instructions.
+</Note>
+
+## Bug reports
+
+Use the [GitHub issue tracker](https://github.com/winsiderss/systeminformer/issues) to report bugs. When filing a report, include:
+
+- A brief description of the issue
+- Steps to reproduce (if known)
+- Expected behavior
+- Actual behavior
+- Your environment — System Informer version and Windows version
+
+The bug report template on GitHub will prompt you for these details automatically.
+
+<Warning>
+  Do not use the public issue tracker to report security vulnerabilities. Instead, follow the responsible disclosure process described in the [security policy](/dev/security).
+</Warning>
+
+## Feature requests
+
+Use the [GitHub issue tracker](https://github.com/winsiderss/systeminformer/issues) to suggest new features, modifications, or ideas. The feature request template asks for:
+
+- A description of the feature or modification
+- Proposed implementation details (optional)
+
+## Pull requests
+
+<Steps>
+  <Step title="Build the project">
+    Clone the repository and build it locally before making changes. See [Building from source](/dev/building). This ensures you start from a working baseline.
+  </Step>
+
+  <Step title="Follow the code conventions">
+    Read [Code conventions](/dev/code-conventions) before writing any code. System Informer has specific naming rules, type conventions, SAL annotation requirements, and memory management patterns that all contributions must follow.
+  </Step>
+
+  <Step title="Make your changes on a branch">
+    Work on a dedicated branch rather than committing directly to `main`. Keep changes focused — one logical change per pull request makes review faster and reduces the chance of regressions.
+  </Step>
+
+  <Step title="Test your changes">
+    Build both debug and release configurations and verify your changes work as expected. If the change touches the kernel driver or plugin loading, test with the driver enabled and disabled.
+
+    ```cmd
+    build\build_debug.cmd
+    build\build_release.cmd
+    ```
+  </Step>
+
+  <Step title="Open the pull request">
+    Open a pull request against the `master` branch on GitHub. Describe what the change does and why. Reference any related issues.
+
+    Suggested reviewers for each area of the codebase are listed in [CODEOWNERS](https://github.com/winsiderss/systeminformer/blob/master/.github/CODEOWNERS):
+
+    | Path | Reviewers |
+    |------|-----------|
+    | `/KSystemInformer` | @jxy-s |
+    | `/SystemInformer` | @dmex, @jxy-s |
+    | `/phlib` | @dmex, @jxy-s |
+    | `/phnt` | @dmex, @jxy-s |
+    | `/plugins` | @dmex, @jxy-s |
+    | `/kphlib` | @jxy-s |
+    | `/tools` | @dmex |
+
+    These are suggestions — it is fine to have your changes reviewed by someone else.
+  </Step>
+</Steps>
+
+## Contributor License Agreement (CLA)
+
+Before your contribution can be accepted, you must agree to the [Contributor License Agreement](https://github.com/winsiderss/systeminformer/blob/master/CLA.md). The CLA grants Winsider Seminars & Solutions, Inc. a perpetual, worldwide, royalty-free copyright and patent license to your submission.
+
+Key points:
+
+- **Originality** — your submission must be your original work. If you include third-party material, disclose it clearly in the pull request description.
+- **Employer IP** — if you are contributing as part of your employment or on behalf of an employer, you must secure permission from your employer before submitting.
+- **Governing law** — the agreement is governed by the laws of Quebec, Canada.
+- **Public record** — contributions and contributor information are maintained indefinitely and disclosed publicly.
+
+<Note>
+  If you change employers in the future and want to submit contributions for your new employer, you must sign a new agreement and secure permission from the new employer.
+</Note>
+
+## Code of conduct
+
+This project follows the [Contributor Covenant Code of Conduct](https://github.com/winsiderss/systeminformer/blob/master/CODE_OF_CONDUCT.md). All participants are expected to:
+
+- Use welcoming and inclusive language
+- Be respectful of differing viewpoints and experiences
+- Accept constructive criticism gracefully
+- Focus on what is best for the community
+
+Unacceptable behavior includes harassment, trolling, personal attacks, and publishing others' private information without consent.
+
+Instances of abusive or unacceptable behavior may be reported to the project team at dmex04@gmail.com and johnny.shaw@live.com. All complaints are reviewed confidentially.
+
+<CardGroup cols={2}>
+  <Card title="Building from source" icon="hammer" href="/dev/building">
+    Set up your build environment and compile System Informer before contributing.
+  </Card>
+  <Card title="Code conventions" icon="code" href="/dev/code-conventions">
+    Naming, types, memory management, and other conventions all contributions must follow.
+  </Card>
+  <Card title="Security policy" icon="shield" href="/dev/security">
+    How to report security vulnerabilities responsibly.
+  </Card>
+  <Card title="Issue tracker" icon="circle-dot" href="https://github.com/winsiderss/systeminformer/issues">
+    File bug reports and feature requests on GitHub.
+  </Card>
+</CardGroup>
